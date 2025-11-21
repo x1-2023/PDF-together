@@ -1,0 +1,27 @@
+{
+  "name": "discord-pdf-whiteboard-activity",
+  "version": "1.0.0",
+  "description": "Discord Activity for shared PDF viewing and whiteboard annotations",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "install:all": "npm install && npm install --workspace=backend && npm install --workspace=frontend",
+    "dev:backend": "npm run dev --workspace=backend",
+    "dev:frontend": "npm run dev --workspace=frontend",
+    "build:backend": "npm run build --workspace=backend",
+    "build:frontend": "npm run build --workspace=frontend",
+    "start:backend": "npm run start --workspace=backend"
+  },
+  "keywords": [
+    "discord",
+    "activity",
+    "pdf",
+    "whiteboard",
+    "collaboration"
+  ],
+  "author": "",
+  "license": "MIT"
+}

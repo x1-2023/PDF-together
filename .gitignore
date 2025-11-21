@@ -1,0 +1,42 @@
+node_modules
+dist
+.env
+*.log
+uploads/*.pdf
+.DS_Store
+
+# SQLite database (contains user data)
+data/*.db
+data/*.db-journal
+data/*.db-shm
+data/*.db-wal
+
+# Backups
+backups/
+
+# Agent & System
+.agent/
+.claude/
+.gemini/
+cloudflared.exe
+
+# Excessive Documentation (Ignored as requested)
+API.md
+ARCHITECTURE.md
+CHANGELOG*.md
+CHECKLISTS.md
+COMMANDS.md
+DEPLOY*.md
+DEVELOPMENT.md
+DOCKER*.md
+HUONG-DAN-TIENG-VIET.md
+IMPLEMENTATION-SUMMARY.md
+INDEX.md
+MANIFEST.md
+PROJECT_SUMMARY.md
+QUICKSTART.md
+README-VI.md
+SECURITY-SETUP.md
+SETUP.md
+SQLITE*.md
+TROUBLESHOOTING.md

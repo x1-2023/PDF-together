@@ -1,0 +1,147 @@
+:root {
+  --bg-color: #F9F7F1;
+  --text-color: #2C3E50;
+  --accent-color: #E67E22;
+  --sidebar-bg: #F0EFE9;
+  --border-color: #D3D3D3;
+  --shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  --font-family: 'Inter', 'Roboto', sans-serif;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-family);
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  overflow: hidden;
+  /* Prevent scroll on body, handle in components */
+}
+
+.app-container {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+}
+
+.sidebar {
+  width: 250px;
+  background-color: var(--sidebar-bg);
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  box-sizing: border-box;
+  transition: transform 0.3s ease;
+}
+
+.sidebar.right {
+  border-right: none;
+  border-left: 1px solid var(--border-color);
+}
+
+.sidebar h3 {
+  margin-top: 0;
+  font-size: 1.2rem;
+  color: var(--accent-color);
+  border-bottom: 2px solid var(--accent-color);
+  padding-bottom: 10px;
+  margin-bottom: 20px;
+}
+
+.pdf-list,
+.user-list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.pdf-item,
+.user-item {
+  padding: 10px;
+  margin-bottom: 8px;
+  background: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.pdf-item:hover,
+.user-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+}
+
+.pdf-item.active {
+  border-left: 4px solid var(--accent-color);
+}
+
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  background-color: var(--bg-color);
+  overflow: hidden;
+}
+
+.board-container {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  justify-content: center;
+  padding: 40px;
+  background-image: radial-gradient(#E0E0E0 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+/* Sidebar Toolbar */
+.sidebar-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  padding: 10px 0;
+}
+
+.toolbar-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.toolbar-divider {
+  width: 100%;
+  height: 1px;
+  background-color: #eee;
+  margin: 5px 0;
+}
+
+.toolbar-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 10px;
+  border-radius: 50%;
+  transition: background 0.2s;
+  color: var(--accent-color) !important;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #bbb;
+}
