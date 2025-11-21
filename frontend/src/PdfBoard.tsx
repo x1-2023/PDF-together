@@ -4,8 +4,11 @@ import { Stage, Layer, Line, Text, Circle } from 'react-konva';
 import { v4 as uuidv4 } from 'uuid';
 import { DrawOp, TextOp, UserProfile, Tool } from './types';
 
-// Configure pdf.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+// Configure pdf.js worker - use local bundled worker for Discord CSP compliance
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.mjs',
+  import.meta.url
+).toString();
 
 interface PdfBoardProps {
   pdfId: string | null;
