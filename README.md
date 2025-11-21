@@ -66,8 +66,22 @@ This guide assumes you are running this app on a Proxmox VM/LXC with IP `192.168
 ### Architecture
 - **Public IP** -> **Router (Port 80/443)** -> **Caddy Gateway** -> **This App (192.168.1.102)**
 
-### 1. Caddy Setup
-Install Caddy on your gateway machine (or the same machine).
+### 1. Caddy Setup (Debian/Ubuntu/Proxmox LXC)
+
+Run these commands on your gateway machine to install Caddy:
+
+```bash
+# Install dependencies
+sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
+
+# Add Caddy repository
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+
+# Install Caddy
+sudo apt update
+sudo apt install caddy
+```
 
 ### 2. Caddyfile Configuration
 Add this to your `/etc/caddy/Caddyfile`:
