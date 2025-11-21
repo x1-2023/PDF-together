@@ -41,7 +41,13 @@ function App() {
         }
 
         // Connect to WebSocket
-        const wsUrl = import.meta.env.VITE_BACKEND_WS_URL || 'ws://localhost:3001';
+        // If running in Discord (iframe), use relative path to go through proxy
+        // Otherwise use the configured env var or localhost
+        const isDiscordActivity = window.location.hostname.includes('discordsays.com');
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = isDiscordActivity
+          ? `${wsProtocol}//${window.location.host}/ws`
+          : (import.meta.env.VITE_BACKEND_WS_URL || 'ws://localhost:3001');
         const params = new URLSearchParams({
           channelId: info.channelId,
           userId: info.userId,
