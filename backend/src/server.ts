@@ -46,9 +46,8 @@ const upload = multer({
       cb(new Error('Only PDF files are allowed'));
     }
   },
-  limits: {
-    fileSize: parseInt(process.env.MAX_FILE_SIZE || '104857600'), // Default 100MB
-  },
+  fileSize: parseInt(process.env.MAX_FILE_SIZE || '524288000'), // Default 500MB
+},
 });
 
 // Routes
