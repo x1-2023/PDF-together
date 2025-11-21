@@ -46,13 +46,18 @@ npm run dev
 We have included an `ecosystem.config.js` for easy deployment.
 
 ```bash
-# Install PM2 globally
+# 1. Build Frontend
+cd frontend
+npm run build
+cd ..
+
+# 2. Install PM2 globally
 npm install -g pm2
 
-# Start both services
+# 3. Start both services (Backend + Frontend Preview)
 pm2 start ecosystem.config.js
 
-# Save list to restart on reboot
+# 4. Save list to restart on reboot
 pm2 save
 pm2 startup
 ```

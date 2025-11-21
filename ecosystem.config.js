@@ -15,9 +15,9 @@ module.exports = {
             name: "discord-pdf-frontend",
             cwd: "./frontend",
             script: "npm",
-            args: "run dev",
+            args: "run preview -- --port 5173 --host",
             env: {
-                PORT: 5173
+                NODE_ENV: "production"
             }
         }
     ]
