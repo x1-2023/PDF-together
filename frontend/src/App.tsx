@@ -5,7 +5,7 @@ import { DrawOp, TextOp, RoomState, WSMessage, DiscordInfo, UserProfile, Tool } 
 import './App.css';
 
 function App() {
-  const [discordInfo, setDiscordInfo] = useState<DiscordInfo | null>(null);
+  // const [discordInfo, setDiscordInfo] = useState<DiscordInfo | null>(null);
   const [roomState, setRoomState] = useState<RoomState | null>(null);
   const [availablePdfs, setAvailablePdfs] = useState<Array<{ id: string; name: string; url: string }>>([]);
   const [uploading, setUploading] = useState(false);
@@ -29,7 +29,7 @@ function App() {
     const init = async () => {
       try {
         const info = await initializeDiscord();
-        setDiscordInfo(info);
+        // setDiscordInfo(info); // Removed unused state update
 
         // Load available PDFs from server
         try {
