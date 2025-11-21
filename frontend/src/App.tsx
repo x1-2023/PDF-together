@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { initializeDiscord } from './discord';
 import { PdfBoard } from './PdfBoard';
-import { DrawOp, TextOp, RoomState, WSMessage, DiscordInfo, UserProfile, Tool } from './types';
+import { DrawOp, TextOp, RoomState, WSMessage, UserProfile, Tool } from './types';
 import './App.css';
 
 function App() {
