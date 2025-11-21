@@ -92,7 +92,8 @@ Add this to your `/etc/caddy/Caddyfile`:
 }
 
 # Replace with your actual domain
-your-domain.com {
+# Your subdomain
+pdf.0xit.me {
     # Proxy to the local IP of this app
     # Frontend (Vite)
     reverse_proxy /ws* 192.168.1.102:3001
