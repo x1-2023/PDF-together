@@ -47,7 +47,7 @@ const upload = multer({
     }
   },
   limits: {
-    fileSize: parseInt(process.env.MAX_FILE_SIZE || '52428800'), // Default 50MB (in bytes)
+    fileSize: parseInt(process.env.MAX_FILE_SIZE || '104857600'), // Default 100MB
   },
 });
 
@@ -223,7 +223,14 @@ const db = new DatabaseManager(DB_PATH);
 console.log(`📂 Database initialized: ${DB_PATH}`);
 
 // Setup WebSocket
-const wss = new WebSocketServer({ server, path: '/ws' });
+const wss = new WebSocketServer({
+  server,
+  path: '/ws',
+  verifyClient: (info, cb) => {
+    // Accept all connections, or implement specific logic for discordsays.com
+    cb(true);
+  }
+});
 const roomManager = new RoomManager(db);
 new WebSocketHandler(wss, roomManager);
 
