@@ -11,23 +11,50 @@ A real-time collaborative PDF reader and whiteboard for Discord Activities.
 
 ### 1. Installation
 
+**Backend:**
 ```bash
-# Install dependencies
+cd backend
 npm install
-
-# Setup environment variables
-# Copy .env.example to .env (if available) or create one
-# Required: VITE_DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET, etc.
+# Create uploads directory and set permissions (Linux/Proxmox)
+mkdir -p uploads
+chmod 777 uploads
 ```
 
-### 2. Running Locally
+**Frontend:**
+```bash
+cd frontend
+npm install
+```
+
+**Environment Variables:**
+Copy `.env.example` to `.env` in `backend/` and `frontend/` (if applicable) and fill in your Discord App credentials.
+
+### 2. Running Locally (Development)
 
 ```bash
-# Start Backend (Port 3001)
-npm run server
-
-# Start Frontend (Port 5173)
+# Terminal 1: Backend
+cd backend
 npm run dev
+
+# Terminal 2: Frontend
+cd frontend
+npm run dev
+```
+
+### 3. Running with PM2 (Production/Stable)
+
+We have included an `ecosystem.config.js` for easy deployment.
+
+```bash
+# Install PM2 globally
+npm install -g pm2
+
+# Start both services
+pm2 start ecosystem.config.js
+
+# Save list to restart on reboot
+pm2 save
+pm2 startup
 ```
 
 ---
