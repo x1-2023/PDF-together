@@ -85,7 +85,7 @@ app.post('/api/token', async (req, res) => {
         client_secret: clientSecret,
         grant_type: 'authorization_code',
         code: code,
-        redirect_uri: '/.proxy',
+        redirect_uri: 'https://pdf.0xit.me',
       }),
     });
 
