@@ -1,13 +1,15 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { initializeDiscord } from './discord';
 import { PdfBoard } from './PdfBoard';
-import { DrawOp, TextOp, RoomState, WSMessage, UserProfile, Tool } from './types';
+import { Dashboard } from './components/Dashboard';
+import { Settings } from './components/Settings';
+import { DrawOp, TextOp, RoomState, WSMessage, UserProfile, Tool, DiscordInfo } from './types';
 import './App.css';
 
 function App() {
-  // const [discordInfo, setDiscordInfo] = useState<DiscordInfo | null>(null);
+  const [discordInfo, setDiscordInfo] = useState<DiscordInfo | null>(null);
   const [roomState, setRoomState] = useState<RoomState | null>(null);
-  const [availablePdfs, setAvailablePdfs] = useState<Array<{ id: string; name: string; url: string }>>([]);
+  const [availablePdfs, setAvailablePdfs] = useState<Array<{ id: string; name: string; url: string; size?: number }>>([]);
   const [uploading, setUploading] = useState(false);
 
   const [cursors, setCursors] = useState<Record<string, { x: number; y: number; color: string }>>({});
@@ -15,9 +17,13 @@ function App() {
 
   // Tool State
   const [currentTool, setCurrentTool] = useState<Tool>('draw');
-  const [currentColor, setCurrentColor] = useState('#ff0000');
+  const [currentColor, setCurrentColor] = useState('#E67E22'); // Default orange
   const [currentSize, setCurrentSize] = useState(3);
   const [currentFontSize, setCurrentFontSize] = useState(16);
+
+  // UI State
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
 
   const wsRef = useRef<WebSocket | null>(null);
   const initRef = useRef(false);
@@ -29,7 +35,7 @@ function App() {
     const init = async () => {
       try {
         const info = await initializeDiscord();
-        // setDiscordInfo(info); // Removed unused state update
+        setDiscordInfo(info);
 
         // Load available PDFs from server
         try {
@@ -41,8 +47,6 @@ function App() {
         }
 
         // Connect to WebSocket
-        // If running in Discord (iframe), use relative path to go through proxy
-        // Otherwise use the configured env var or localhost
         const isDiscordActivity = window.location.hostname.includes('discordsays.com');
         const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 
@@ -51,7 +55,6 @@ function App() {
           baseUrl = `${wsProtocol}//${window.location.host}`;
         }
 
-        // Remove trailing slash or /ws to normalize
         baseUrl = baseUrl.replace(/\/ws\/?$/, '').replace(/\/$/, '');
 
         const wsUrl = baseUrl;
@@ -102,13 +105,28 @@ function App() {
         break;
 
       case 'set_pdf':
-        setRoomState((prev) => ({
-          ...prev!,
-          currentPdfId: message.pdfId,
-          currentPage: 1,
-          drawOps: [],
-          textOps: [],
-        }));
+        // If pdfId is null, it means we are going back to dashboard
+        setRoomState((prev) => {
+          if (!prev) return null;
+
+          if (!message.pdfId) {
+            return {
+              ...prev,
+              currentPdfId: null,
+              currentPage: 1,
+              drawOps: [],
+              textOps: [],
+            };
+          }
+
+          return {
+            ...prev,
+            currentPdfId: message.pdfId,
+            currentPage: 1,
+            drawOps: [],
+            textOps: [],
+          };
+        });
         break;
 
       case 'change_page':
@@ -128,7 +146,6 @@ function App() {
       case 'text_broadcast':
         setRoomState((prev) => {
           if (!prev) return null;
-          // Check if we should update existing op or add new one
           const existingIndex = prev.textOps.findIndex(op => op.id === message.op.id);
           if (existingIndex !== -1) {
             const newTextOps = [...prev.textOps];
@@ -165,7 +182,6 @@ function App() {
 
       case 'pdf_deleted':
         setAvailablePdfs((prev) => prev.filter(pdf => pdf.id !== message.pdfId));
-        // If current PDF was deleted, clear it
         setRoomState((prev) => {
           if (prev?.currentPdfId === message.pdfId) {
             return {
@@ -234,13 +250,12 @@ function App() {
 
       const { pdfId, url } = await response.json();
 
-      // Update local list immediately
       setAvailablePdfs((prev) => [
         ...prev,
         { id: pdfId, name: file.name, url, size: file.size }
       ]);
 
-      // Notify all clients about the new PDF
+      // Automatically open the new book for everyone
       sendWSMessage({ type: 'set_pdf', pdfId });
     } catch (error) {
       console.error('Upload error:', error);
@@ -249,6 +264,36 @@ function App() {
       setUploading(false);
     }
   };
+
+  const handleSelectPdf = (pdfId: string) => {
+    sendWSMessage({ type: 'set_pdf', pdfId });
+  };
+
+  const handleCloseBook = () => {
+    // Send null pdfId to return everyone to dashboard
+    sendWSMessage({ type: 'set_pdf', pdfId: null });
+  };
+
+  const handleDeletePdf = async (pdfId: string) => {
+    if (!confirm('Are you sure you want to delete this book? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/pdfs/${pdfId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete PDF');
+      }
+    } catch (error) {
+      console.error('Delete error:', error);
+      alert('Failed to delete PDF');
+    }
+  };
+
+  // --- Board Handlers ---
 
   const handleChangePage = (page: number) => {
     sendWSMessage({ type: 'change_page', page });
@@ -303,240 +348,224 @@ function App() {
     });
   };
 
-  const handleDeletePdf = async (pdfId: string) => {
-    if (!confirm('Are you sure you want to delete this PDF? This action cannot be undone.')) {
-      return;
-    }
+  // --- Render Helpers ---
 
-    try {
-      const response = await fetch(`/api/pdfs/${pdfId}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to delete PDF');
-      }
-
-      // UI update will happen via WebSocket 'pdf_deleted' message
-    } catch (error) {
-      console.error('Delete error:', error);
-      alert('Failed to delete PDF');
-    }
-  };
+  const currentUserProfile = discordInfo ? {
+    id: discordInfo.userId,
+    username: discordInfo.username,
+    discriminator: discordInfo.discriminator,
+    avatar: discordInfo.avatar
+  } : null;
 
   return (
     <div className="app-container">
-      {/* Left Sidebar: Bookshelf */}
+      {/* Left Sidebar: Navigation */}
       <div className="sidebar">
-        <h3>📚 Bookshelf</h3>
+        <h3>Navigation</h3>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <button
+            className={`toolbar-btn ${!roomState?.currentPdfId ? 'active' : ''}`}
+            style={{ width: '100%', justifyContent: 'flex-start', padding: '0 15px', borderRadius: '8px' }}
+            onClick={handleCloseBook}
+          >
+            📚 Bookshelf
+          </button>
+          <button
+            className="toolbar-btn"
+            style={{ width: '100%', justifyContent: 'flex-start', padding: '0 15px', borderRadius: '8px' }}
+            onClick={() => setIsSettingsOpen(true)}
+          >
+            ⚙️ Settings
+          </button>
+        </div>
 
-        <label className="upload-btn" style={{
-          display: 'block',
-          width: '100%',
-          padding: '10px',
-          background: '#E67E22',
-          color: 'white',
-          textAlign: 'center',
-          borderRadius: '6px',
-          marginBottom: '20px',
-          cursor: uploading ? 'not-allowed' : 'pointer'
-        }}>
-          {uploading ? 'Uploading...' : '+ Upload New Book'}
-          <input
-            type="file"
-            accept="application/pdf"
-            onChange={handleFileUpload}
-            disabled={uploading}
-            style={{ display: 'none' }}
+        <div style={{ marginTop: 'auto' }}>
+          <h3>Classmates</h3>
+          <div className="users-list">
+            {Object.values(users).length === 0 ? (
+              <p style={{ color: '#7f8c8d', fontStyle: 'italic', fontSize: '0.9rem' }}>Just you here.</p>
+            ) : (
+              Object.values(users).map(user => (
+                <div key={user.id} className="user-item">
+                  <img
+                    src={user.avatar
+                      ? `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png`
+                      : 'https://cdn.discordapp.com/embed/avatars/0.png'
+                    }
+                    alt={user.username}
+                    className="user-avatar"
+                  />
+                  <span className="user-name">{user.username}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="main-content">
+        {roomState?.currentPdfId ? (
+          <>
+            <div className="reader-nav">
+              <button className="back-btn" onClick={handleCloseBook}>
+                ← Back to Bookshelf
+              </button>
+              <span style={{ fontWeight: 600 }}>
+                {availablePdfs.find(p => p.id === roomState.currentPdfId)?.name || 'Unknown Book'}
+              </span>
+              <div style={{ width: '100px' }}></div> {/* Spacer for centering */}
+            </div>
+            <div className="board-container">
+              <PdfBoard
+                pdfId={roomState.currentPdfId}
+                currentPage={roomState.currentPage}
+                drawOps={roomState.drawOps.filter(op => op.page === roomState.currentPage)}
+                textOps={roomState.textOps.filter(op => op.page === roomState.currentPage)}
+
+                onDraw={handleDraw}
+                onText={handleText}
+
+                onDeleteAnnotation={handleDeleteAnnotation}
+                cursors={cursors}
+                onCursorMove={handleCursorMove}
+                users={users}
+                // Tool Props
+                currentTool={currentTool}
+                currentColor={currentColor}
+                currentSize={currentSize}
+                currentFontSize={currentFontSize}
+              />
+            </div>
+          </>
+        ) : (
+          <Dashboard
+            pdfs={availablePdfs}
+            onSelectPdf={handleSelectPdf}
+            onDeletePdf={handleDeletePdf}
+            onUpload={handleFileUpload}
+            uploading={uploading}
+            currentUser={currentUserProfile}
           />
-        </label>
+        )}
+      </div>
 
-        <div className="pdf-list">
-          {availablePdfs.length === 0 ? (
-            <p style={{ color: '#7f8c8d', fontStyle: 'italic' }}>No books yet.</p>
-          ) : (
-            availablePdfs.map(pdf => (
-              <div
-                key={pdf.id}
-                className={`pdf-item ${roomState?.currentPdfId === pdf.id ? 'active' : ''}`}
-                onClick={() => sendWSMessage({ type: 'set_pdf', pdfId: pdf.id })}
-              >
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  📄 {pdf.name}
-                </span>
+      {/* Right Sidebar: Tools (Only visible when reading) */}
+      {roomState?.currentPdfId && (
+        <div className="sidebar right">
+          <h3>Tools</h3>
+          <div className="sidebar-toolbar">
+            {/* Page Navigation */}
+            <div className="toolbar-section">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                <button className="toolbar-btn" onClick={() => handleChangePage(roomState.currentPage - 1)} disabled={roomState.currentPage <= 1}>←</button>
+                <span>Page {roomState.currentPage}</span>
+                <button className="toolbar-btn" onClick={() => handleChangePage(roomState.currentPage + 1)}>→</button>
+              </div>
+            </div>
+
+            <div className="toolbar-divider"></div>
+
+            {/* Drawing Tools */}
+            <div className="toolbar-section">
+              <div style={{ display: 'flex', gap: '5px', marginBottom: '10px' }}>
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDeletePdf(pdf.id);
-                  }}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    opacity: 0.5,
-                  }}
-                  title="Delete PDF"
+                  className={`toolbar-btn ${currentTool === 'draw' ? 'active' : ''}`}
+                  onClick={() => setCurrentTool('draw')}
+                  title="Draw"
                 >
-                  🗑️
+                  ✏️
+                </button>
+                <button
+                  className={`toolbar-btn ${currentTool === 'text' ? 'active' : ''}`}
+                  onClick={() => setCurrentTool('text')}
+                  title="Text"
+                >
+                  T
+                </button>
+                <button
+                  className={`toolbar-btn ${currentTool === 'eraser' ? 'active' : ''}`}
+                  onClick={() => setCurrentTool('eraser')}
+                  title="Eraser"
+                >
+                  🧹
                 </button>
               </div>
-            ))
-          )}
-        </div>
-      </div>
 
-      {/* Main Content: Whiteboard */}
-      <div className="main-content">
-        <div className="board-container">
-          {roomState?.currentPdfId ? (
-            <PdfBoard
-              pdfId={roomState.currentPdfId}
-              currentPage={roomState.currentPage}
-              drawOps={roomState.drawOps.filter(op => op.page === roomState.currentPage)}
-              textOps={roomState.textOps.filter(op => op.page === roomState.currentPage)}
-
-              onDraw={handleDraw}
-              onText={handleText}
-
-              onDeleteAnnotation={handleDeleteAnnotation}
-              cursors={cursors}
-              onCursorMove={handleCursorMove}
-              users={users}
-              // Tool Props
-              currentTool={currentTool}
-              currentColor={currentColor}
-              currentSize={currentSize}
-              currentFontSize={currentFontSize}
-            />
-          ) : (
-            <div className="placeholder" style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              height: '100%',
-              color: '#95a5a6'
-            }}>
-              <div style={{ fontSize: '64px', marginBottom: '20px' }}>📖</div>
-              <h2>Select a book to start studying</h2>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Right Sidebar: Tools & Classmates */}
-      <div className="sidebar right">
-        <h3>🛠️ Tools</h3>
-        <div className="sidebar-toolbar">
-          {/* Page Navigation */}
-          <div className="toolbar-section">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-              <button className="toolbar-btn" onClick={() => handleChangePage(roomState ? roomState.currentPage - 1 : 1)} disabled={!roomState || roomState.currentPage <= 1}>←</button>
-              <span>{roomState?.currentPage || 1}</span>
-              <button className="toolbar-btn" onClick={() => handleChangePage(roomState ? roomState.currentPage + 1 : 1)} disabled={!roomState}>→</button>
-            </div>
-          </div>
-
-          <div className="toolbar-divider"></div>
-
-          {/* Tools */}
-          <div className="toolbar-section">
-            <div style={{ display: 'flex', gap: '5px', marginBottom: '10px' }}>
-              <button
-                className={`toolbar-btn ${currentTool === 'draw' ? 'active' : ''}`}
-                onClick={() => setCurrentTool('draw')}
-                title="Draw"
-              >
-                ✏️
-              </button>
-              <button
-                className={`toolbar-btn ${currentTool === 'text' ? 'active' : ''}`}
-                onClick={() => setCurrentTool('text')}
-                title="Text"
-              >
-                T
-              </button>
-              <button
-                className={`toolbar-btn ${currentTool === 'eraser' ? 'active' : ''}`}
-                onClick={() => setCurrentTool('eraser')}
-                title="Eraser"
-              >
-                🧹
-              </button>
-            </div>
-
-            {/* Color Picker */}
-            <div style={{ marginBottom: '10px' }}>
-              <label style={{ display: 'block', fontSize: '12px', marginBottom: '5px' }}>Color</label>
-              <input
-                type="color"
-                value={currentColor}
-                onChange={(e) => setCurrentColor(e.target.value)}
-                style={{ width: '100%', height: '30px', border: 'none', padding: 0 }}
-              />
-            </div>
-
-            {/* Size Slider */}
-            <div style={{ marginBottom: '10px' }}>
-              <label style={{ display: 'block', fontSize: '12px', marginBottom: '5px' }}>Size: {currentSize}px</label>
-              <input
-                type="range"
-                min="1"
-                max="20"
-                value={currentSize}
-                onChange={(e) => setCurrentSize(parseInt(e.target.value))}
-                style={{ width: '100%' }}
-              />
-            </div>
-
-            {/* Font Size Slider */}
-            {currentTool === 'text' && (
+              {/* Color Picker */}
               <div style={{ marginBottom: '10px' }}>
-                <label style={{ display: 'block', fontSize: '12px', marginBottom: '5px' }}>Font Size: {currentFontSize}px</label>
+                <label style={{ display: 'block', fontSize: '12px', marginBottom: '5px' }}>Color</label>
+                <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+                  {['#E67E22', '#E74C3C', '#2ECC71', '#3498DB', '#9B59B6', '#34495E'].map(color => (
+                    <div
+                      key={color}
+                      onClick={() => setCurrentColor(color)}
+                      style={{
+                        width: '24px',
+                        height: '24px',
+                        borderRadius: '50%',
+                        backgroundColor: color,
+                        cursor: 'pointer',
+                        border: currentColor === color ? '2px solid #2C3E50' : '1px solid #ddd'
+                      }}
+                    />
+                  ))}
+                  <input
+                    type="color"
+                    value={currentColor}
+                    onChange={(e) => setCurrentColor(e.target.value)}
+                    style={{ width: '24px', height: '24px', padding: 0, border: 'none', background: 'none' }}
+                  />
+                </div>
+              </div>
+
+              {/* Size Slider */}
+              <div style={{ marginBottom: '10px' }}>
+                <label style={{ display: 'block', fontSize: '12px', marginBottom: '5px' }}>Size: {currentSize}px</label>
                 <input
                   type="range"
-                  min="12"
-                  max="48"
-                  value={currentFontSize}
-                  onChange={(e) => setCurrentFontSize(parseInt(e.target.value))}
-                  style={{ width: '100%' }}
+                  min="1"
+                  max="20"
+                  value={currentSize}
+                  onChange={(e) => setCurrentSize(parseInt(e.target.value))}
+                  style={{ width: '100%', accentColor: 'var(--bg-accent)' }}
                 />
               </div>
-            )}
 
-            <button
-              className="toolbar-btn"
-              onClick={handleClearPage}
-              style={{ width: '100%', marginTop: '10px', background: '#e74c3c', color: 'white' }}
-            >
-              Clear Page
-            </button>
+              {/* Font Size Slider */}
+              {currentTool === 'text' && (
+                <div style={{ marginBottom: '10px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', marginBottom: '5px' }}>Font Size: {currentFontSize}px</label>
+                  <input
+                    type="range"
+                    min="12"
+                    max="48"
+                    value={currentFontSize}
+                    onChange={(e) => setCurrentFontSize(parseInt(e.target.value))}
+                    style={{ width: '100%', accentColor: 'var(--bg-accent)' }}
+                  />
+                </div>
+              )}
+
+              <button
+                className="toolbar-btn"
+                onClick={handleClearPage}
+                style={{ width: '100%', marginTop: '10px', background: '#fff', color: '#e74c3c', border: '1px solid #e74c3c' }}
+              >
+                Clear Page
+              </button>
+            </div>
           </div>
         </div>
+      )}
 
-        <div className="toolbar-divider"></div>
-
-        <h3>👥 Classmates</h3>
-        <div className="users-list">
-          {Object.values(users).length === 0 ? (
-            <p style={{ color: '#7f8c8d', fontStyle: 'italic' }}>Just you here.</p>
-          ) : (
-            Object.values(users).map(user => (
-              <div key={user.id} className="user-item">
-                <img
-                  src={`https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png`}
-                  alt={user.username}
-                  className="user-avatar"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).src = 'https://cdn.discordapp.com/embed/avatars/0.png';
-                  }}
-                />
-                <span className="user-name">{user.username}</span>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
+      <Settings
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        currentUser={currentUserProfile}
+        theme={theme}
+        onThemeChange={setTheme}
+      />
     </div>
   );
 }
