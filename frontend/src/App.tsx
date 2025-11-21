@@ -9,7 +9,7 @@ function App() {
   const [roomState, setRoomState] = useState<RoomState | null>(null);
   const [availablePdfs, setAvailablePdfs] = useState<Array<{ id: string; name: string; url: string }>>([]);
   const [uploading, setUploading] = useState(false);
-  const [isConnected, setIsConnected] = useState(false);
+
   const [cursors, setCursors] = useState<Record<string, { x: number; y: number; color: string }>>({});
   const [users, setUsers] = useState<Record<string, UserProfile>>({});
 
@@ -54,7 +54,7 @@ function App() {
 
         ws.onopen = () => {
           console.log('WebSocket connected');
-          setIsConnected(true);
+
         };
 
         ws.onmessage = (event) => {
@@ -64,7 +64,7 @@ function App() {
 
         ws.onclose = () => {
           console.log('WebSocket disconnected');
-          setIsConnected(false);
+
         };
 
         ws.onerror = (error) => {
@@ -377,10 +377,10 @@ function App() {
               currentPage={roomState.currentPage}
               drawOps={roomState.drawOps.filter(op => op.page === roomState.currentPage)}
               textOps={roomState.textOps.filter(op => op.page === roomState.currentPage)}
-              onChangePage={handleChangePage}
+
               onDraw={handleDraw}
               onText={handleText}
-              onClearPage={handleClearPage}
+
               onDeleteAnnotation={handleDeleteAnnotation}
               cursors={cursors}
               onCursorMove={handleCursorMove}

@@ -19,10 +19,10 @@ interface PdfBoardProps {
   currentColor: string;
   currentSize: number;
   currentFontSize: number;
-  onChangePage: (page: number) => void;
+
   onDraw: (drawOp: Omit<DrawOp, 'userId' | 'ts'>) => void;
   onText: (textOp: Omit<TextOp, 'userId' | 'ts'>) => void;
-  onClearPage: () => void;
+
   onDeleteAnnotation: (id: string) => void;
   onCursorMove: (x: number, y: number, color: string) => void;
 }
@@ -43,10 +43,10 @@ export const PdfBoard: React.FC<PdfBoardProps> = ({
   currentColor,
   currentSize,
   currentFontSize,
-  onChangePage,
+
   onDraw,
   onText,
-  onClearPage,
+
   onDeleteAnnotation,
   onCursorMove,
 }) => {
