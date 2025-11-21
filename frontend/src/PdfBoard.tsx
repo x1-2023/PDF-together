@@ -3,12 +3,11 @@ import * as pdfjsLib from 'pdfjs-dist';
 import { Stage, Layer, Line, Text, Circle } from 'react-konva';
 import { v4 as uuidv4 } from 'uuid';
 import { DrawOp, TextOp, UserProfile, Tool } from './types';
+import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
-// Configure pdf.js worker - use local bundled worker for Discord CSP compliance
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.mjs',
-  import.meta.url
-).toString();
+// Configure pdf.js worker - use bundled worker for Discord CSP compliance
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
+
 
 interface PdfBoardProps {
   pdfId: string | null;
