@@ -5,7 +5,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { DrawOp, TextOp, UserProfile, Tool } from './types';
 
 // Configure pdf.js worker - reference from public folder for Discord CSP compliance
-pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
+
 
 
 
