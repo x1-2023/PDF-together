@@ -22,12 +22,25 @@ export interface TextOp {
   ts: number;
 }
 
+export interface StickyOp {
+  id: string;
+  type: 'sticky';
+  page: number;
+  x: number;
+  y: number;
+  text: string;
+  color: string; // Background color
+  userId: string;
+  ts: number;
+}
+
 export interface RoomState {
   channelId: string;
   currentPdfId: string | null;
   currentPage: number;
   drawOps: DrawOp[];
   textOps: TextOp[];
+  stickyOps: StickyOp[];
 }
 
 export interface UserProfile {
@@ -38,11 +51,12 @@ export interface UserProfile {
 }
 
 export type WSMessage =
-  | { type: 'set_pdf'; pdfId: string }
+  | { type: 'set_pdf'; pdfId: string | null }
   | { type: 'change_page'; page: number }
   | { type: 'snapshot'; data: RoomState }
   | { type: 'draw_broadcast'; op: DrawOp }
   | { type: 'text_broadcast'; op: TextOp }
+  | { type: 'sticky_broadcast'; op: StickyOp }
   | { type: 'clear_page_broadcast'; page: number }
   | { type: 'delete_annotation_broadcast'; id: string }
   | {
@@ -64,4 +78,5 @@ export interface DiscordInfo {
   avatar: string | null;
 }
 
-export type Tool = 'draw' | 'text' | 'eraser';
+export type Tool = 'draw' | 'text' | 'sticky' | 'eraser';
+

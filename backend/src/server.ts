@@ -129,14 +129,26 @@ app.post('/api/token', async (req, res) => {
 app.get('/api/pdfs', (req, res) => {
   try {
     const files = fs.readdirSync(UPLOADS_DIR);
+    const dbBooks = db.getAllBooks();
+    const dbBooksMap = new Map(dbBooks.map(b => [b.id, b]));
+
     const pdfFiles = files
       .filter(f => f.endsWith('.pdf'))
-      .map(f => ({
-        id: f,
-        name: f.replace(/^\d+-/, '').replace(/^[a-f0-9-]+-/, ''), // Remove UUID prefix if exists
-        url: `/pdf/${f}`,
-        size: fs.statSync(path.join(UPLOADS_DIR, f)).size
-      }));
+      .map(f => {
+        const stats = fs.statSync(path.join(UPLOADS_DIR, f));
+        const bookMetadata = dbBooksMap.get(f);
+
+        return {
+          id: f,
+          title: bookMetadata?.title || f.replace(/^\d+-/, '').replace(/^[a-f0-9-]+-/, ''), // Use title from DB or fallback to filename
+          author: bookMetadata?.author || 'Unknown Author',
+          cover: bookMetadata?.cover_image || null,
+          description: bookMetadata?.description || '',
+          url: `/pdf/${f}`,
+          size: stats.size,
+          uploadedAt: bookMetadata?.created_at || stats.birthtimeMs
+        };
+      });
 
     res.json({ pdfs: pdfFiles });
   } catch (error) {
@@ -154,15 +166,60 @@ app.post('/api/upload-pdf', upload.single('file'), (req, res) => {
     const pdfId = req.file.filename;
     const url = `/pdf/${pdfId}`;
 
+    // Extract metadata from request body
+    const { title, author, description } = req.body;
+
+    // Save metadata to DB
+    db.saveBook({
+      id: pdfId,
+      title: title || req.file.originalname.replace('.pdf', ''),
+      author: author || 'Unknown Author',
+      description: description || '',
+      uploaded_by: 'user' // TODO: Get actual user from token if available
+    });
+
     console.log(`PDF uploaded: ${pdfId}`);
 
     res.json({
       pdfId,
       url,
+      title: title || req.file.originalname,
+      author: author || 'Unknown Author'
     });
   } catch (error) {
     console.error('Upload error:', error);
     res.status(500).json({ error: 'Failed to upload file' });
+  }
+});
+
+// Update book metadata
+app.put('/api/pdfs/:id/metadata', (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, author, description, cover_image } = req.body;
+
+    const book = db.getBook(id);
+    if (!book) {
+      // If book doesn't exist in DB but exists in FS (legacy), create it
+      const filePath = path.join(UPLOADS_DIR, id);
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ error: 'PDF not found' });
+      }
+    }
+
+    db.saveBook({
+      id,
+      title: title || book?.title || id,
+      author: author !== undefined ? author : book?.author,
+      description: description !== undefined ? description : book?.description,
+      cover_image: cover_image !== undefined ? cover_image : book?.cover_image,
+      uploaded_by: book?.uploaded_by // Preserve uploader
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error updating metadata:', error);
+    res.status(500).json({ error: 'Failed to update metadata' });
   }
 });
 
@@ -188,7 +245,7 @@ app.delete('/api/pdfs/:id', (req, res) => {
       fs.unlinkSync(filePath);
     }
 
-    // Delete annotations from DB (for all channels)
+    // Delete annotations from DB (for all channels) AND book metadata
     db.deleteAllAnnotationsForPdf(id);
 
     // Broadcast deletion to all connected clients

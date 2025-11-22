@@ -25,9 +25,22 @@ export const Settings: React.FC<SettingsProps> = ({
                     <h2>Settings</h2>
                     <button className="close-btn" onClick={onClose}>×</button>
                 </div>
-            </div>
-        </div>
-                    </section >
+
+                <div className="modal-body">
+                    <section className="settings-section">
+                        <h3>User Profile</h3>
+                        <div className="user-profile-preview">
+                            <img
+                                src={currentUser?.avatar ? `https://cdn.discordapp.com/avatars/${currentUser.id}/${currentUser.avatar}.png` : 'https://cdn.discordapp.com/embed/avatars/0.png'}
+                                alt={currentUser?.username}
+                                className="user-avatar-large"
+                            />
+                            <div className="user-info">
+                                <span className="username">{currentUser?.username}</span>
+                                <span className="discriminator">#{currentUser?.discriminator}</span>
+                            </div>
+                        </div>
+                    </section>
 
                     <section className="settings-section">
                         <h3>Appearance</h3>
@@ -49,6 +62,13 @@ export const Settings: React.FC<SettingsProps> = ({
                                 </button>
                             </div>
                         </div>
+                        <div className="setting-item">
+                            <label>Study Mode</label>
+                            <div className="toggle-switch">
+                                <input type="checkbox" id="study-mode" defaultChecked />
+                                <label htmlFor="study-mode" title="Hides distractions (Coming soon)"></label>
+                            </div>
+                        </div>
                     </section>
 
                     <section className="settings-section">
@@ -56,8 +76,8 @@ export const Settings: React.FC<SettingsProps> = ({
                         <p className="version-info">Discord PDF Together v1.0.0</p>
                         <p className="credits">Designed for focused study sessions.</p>
                     </section>
-                </div >
-            </div >
-        </div >
+                </div>
+            </div>
+        </div>
     );
 };

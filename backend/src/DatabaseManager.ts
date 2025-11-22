@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import { DrawOp, TextOp } from './types';
+import { DrawOp, TextOp, StickyOp } from './types';
 import path from 'path';
 
 interface AnnotationRow {
@@ -7,7 +7,7 @@ interface AnnotationRow {
   channel_id: string;
   pdf_id: string;
   page: number;
-  type: 'draw' | 'text';
+  type: 'draw' | 'text' | 'sticky';
   data: string; // JSON string
   user_id: string;
   created_at: number;
@@ -29,34 +29,85 @@ export class DatabaseManager {
   }
 
   private initDatabase(): void {
-    // Create annotations table
+    // Create annotations table (v2 to support sticky notes)
     this.db.exec(`
-      CREATE TABLE IF NOT EXISTS annotations (
+      CREATE TABLE IF NOT EXISTS annotations_v2 (
         id TEXT PRIMARY KEY,
         channel_id TEXT NOT NULL,
         pdf_id TEXT NOT NULL,
         page INTEGER NOT NULL,
-        type TEXT NOT NULL CHECK(type IN ('draw', 'text')),
+        type TEXT NOT NULL CHECK(type IN ('draw', 'text', 'sticky')),
         data TEXT NOT NULL,
         user_id TEXT NOT NULL,
         created_at INTEGER NOT NULL
       );
 
-      CREATE INDEX IF NOT EXISTS idx_channel_pdf ON annotations(channel_id, pdf_id);
-      CREATE INDEX IF NOT EXISTS idx_channel_pdf_page ON annotations(channel_id, pdf_id, page);
+      CREATE INDEX IF NOT EXISTS idx_channel_pdf_v2 ON annotations_v2(channel_id, pdf_id);
+      CREATE INDEX IF NOT EXISTS idx_channel_pdf_page_v2 ON annotations_v2(channel_id, pdf_id, page);
+
+      -- Create books table for metadata
+      CREATE TABLE IF NOT EXISTS books (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        author TEXT,
+        cover_image TEXT,
+        description TEXT,
+        uploaded_by TEXT,
+        created_at INTEGER NOT NULL
+      );
     `);
 
-    console.log('✅ Database initialized');
+    console.log('✅ Database initialized (v2 + books)');
   }
+
+  // --- Book Metadata Methods ---
+
+  saveBook(book: {
+    id: string;
+    title: string;
+    author?: string;
+    cover_image?: string;
+    description?: string;
+    uploaded_by?: string;
+  }): void {
+    const stmt = this.db.prepare(`
+      INSERT OR REPLACE INTO books (id, title, author, cover_image, description, uploaded_by, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    stmt.run(
+      book.id,
+      book.title,
+      book.author || null,
+      book.cover_image || null,
+      book.description || null,
+      book.uploaded_by || 'system',
+      Date.now()
+    );
+  }
+
+  getBook(id: string): any {
+    return this.db.prepare('SELECT * FROM books WHERE id = ?').get(id);
+  }
+
+  getAllBooks(): any[] {
+    return this.db.prepare('SELECT * FROM books ORDER BY created_at DESC').all();
+  }
+
+  deleteBook(id: string): void {
+    this.db.prepare('DELETE FROM books WHERE id = ?').run(id);
+  }
+
+  // --- Annotation Methods ---
 
   // Save a single annotation
   saveAnnotation(
     channelId: string,
     pdfId: string,
-    annotation: DrawOp | TextOp
+    annotation: DrawOp | TextOp | StickyOp
   ): void {
     const stmt = this.db.prepare(`
-      INSERT OR REPLACE INTO annotations (id, channel_id, pdf_id, page, type, data, user_id, created_at)
+      INSERT OR REPLACE INTO annotations_v2 (id, channel_id, pdf_id, page, type, data, user_id, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
@@ -76,14 +127,14 @@ export class DatabaseManager {
   saveAnnotations(
     channelId: string,
     pdfId: string,
-    annotations: (DrawOp | TextOp)[]
+    annotations: (DrawOp | TextOp | StickyOp)[]
   ): void {
     const insert = this.db.prepare(`
-      INSERT OR REPLACE INTO annotations (id, channel_id, pdf_id, page, type, data, user_id, created_at)
+      INSERT OR REPLACE INTO annotations_v2 (id, channel_id, pdf_id, page, type, data, user_id, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
-    const insertMany = this.db.transaction((items: (DrawOp | TextOp)[]) => {
+    const insertMany = this.db.transaction((items: (DrawOp | TextOp | StickyOp)[]) => {
       for (const annotation of items) {
         insert.run(
           annotation.id,
@@ -105,10 +156,11 @@ export class DatabaseManager {
   loadAnnotations(channelId: string, pdfId: string): {
     drawOps: DrawOp[];
     textOps: TextOp[];
+    stickyOps: StickyOp[];
   } {
     const rows = this.db
       .prepare<[string, string]>(`
-        SELECT * FROM annotations
+        SELECT * FROM annotations_v2
         WHERE channel_id = ? AND pdf_id = ?
         ORDER BY created_at ASC
       `)
@@ -116,6 +168,7 @@ export class DatabaseManager {
 
     const drawOps: DrawOp[] = [];
     const textOps: TextOp[] = [];
+    const stickyOps: StickyOp[] = [];
 
     for (const row of rows) {
       const data = JSON.parse(row.data);
@@ -123,20 +176,23 @@ export class DatabaseManager {
         drawOps.push(data as DrawOp);
       } else if (row.type === 'text') {
         textOps.push(data as TextOp);
+      } else if (row.type === 'sticky') {
+        stickyOps.push(data as StickyOp);
       }
     }
 
-    return { drawOps, textOps };
+    return { drawOps, textOps, stickyOps };
   }
 
   // Load annotations for a specific page (for optimization)
   loadAnnotationsForPage(channelId: string, pdfId: string, page: number): {
     drawOps: DrawOp[];
     textOps: TextOp[];
+    stickyOps: StickyOp[];
   } {
     const rows = this.db
       .prepare<[string, string, number]>(`
-        SELECT * FROM annotations
+        SELECT * FROM annotations_v2
         WHERE channel_id = ? AND pdf_id = ? AND page = ?
         ORDER BY created_at ASC
       `)
@@ -144,6 +200,7 @@ export class DatabaseManager {
 
     const drawOps: DrawOp[] = [];
     const textOps: TextOp[] = [];
+    const stickyOps: StickyOp[] = [];
 
     for (const row of rows) {
       const data = JSON.parse(row.data);
@@ -151,42 +208,46 @@ export class DatabaseManager {
         drawOps.push(data as DrawOp);
       } else if (row.type === 'text') {
         textOps.push(data as TextOp);
+      } else if (row.type === 'sticky') {
+        stickyOps.push(data as StickyOp);
       }
     }
 
-    return { drawOps, textOps };
+    return { drawOps, textOps, stickyOps };
   }
 
   // Delete a specific annotation
   deleteAnnotation(id: string): void {
-    this.db.prepare('DELETE FROM annotations WHERE id = ?').run(id);
+    this.db.prepare('DELETE FROM annotations_v2 WHERE id = ?').run(id);
   }
 
   // Delete all annotations for a specific page
   deleteAnnotationsForPage(channelId: string, pdfId: string, page: number): void {
     this.db
-      .prepare('DELETE FROM annotations WHERE channel_id = ? AND pdf_id = ? AND page = ?')
+      .prepare('DELETE FROM annotations_v2 WHERE channel_id = ? AND pdf_id = ? AND page = ?')
       .run(channelId, pdfId, page);
   }
 
   // Delete all annotations for a specific PDF (all channels)
   deleteAllAnnotationsForPdf(pdfId: string): void {
     this.db
-      .prepare('DELETE FROM annotations WHERE pdf_id = ?')
+      .prepare('DELETE FROM annotations_v2 WHERE pdf_id = ?')
       .run(pdfId);
+    // Also delete book metadata
+    this.deleteBook(pdfId);
   }
 
   // Delete all annotations for a specific PDF (specific channel)
   deleteAnnotationsForPdf(channelId: string, pdfId: string): void {
     this.db
-      .prepare('DELETE FROM annotations WHERE channel_id = ? AND pdf_id = ?')
+      .prepare('DELETE FROM annotations_v2 WHERE channel_id = ? AND pdf_id = ?')
       .run(channelId, pdfId);
   }
 
   // Get count of annotations
   getAnnotationCount(channelId: string, pdfId: string): number {
     const result = this.db
-      .prepare<[string, string]>('SELECT COUNT(*) as count FROM annotations WHERE channel_id = ? AND pdf_id = ?')
+      .prepare<[string, string]>('SELECT COUNT(*) as count FROM annotations_v2 WHERE channel_id = ? AND pdf_id = ?')
       .get(channelId, pdfId) as { count: number };
     return result.count;
   }
@@ -199,7 +260,7 @@ export class DatabaseManager {
           pdf_id,
           COUNT(*) as count,
           MAX(created_at) as latest
-        FROM annotations
+        FROM annotations_v2
         WHERE channel_id = ?
         GROUP BY pdf_id
         ORDER BY latest DESC
@@ -213,7 +274,7 @@ export class DatabaseManager {
   cleanupOldAnnotations(daysOld: number = 30): number {
     const cutoffTime = Date.now() - (daysOld * 24 * 60 * 60 * 1000);
     const result = this.db
-      .prepare('DELETE FROM annotations WHERE created_at < ?')
+      .prepare('DELETE FROM annotations_v2 WHERE created_at < ?')
       .run(cutoffTime);
     return result.changes;
   }
@@ -231,15 +292,15 @@ export class DatabaseManager {
     dbSizeBytes: number;
   } {
     const totalAnnotations = this.db
-      .prepare('SELECT COUNT(*) as count FROM annotations')
+      .prepare('SELECT COUNT(*) as count FROM annotations_v2')
       .get() as { count: number };
 
     const totalChannels = this.db
-      .prepare('SELECT COUNT(DISTINCT channel_id) as count FROM annotations')
+      .prepare('SELECT COUNT(DISTINCT channel_id) as count FROM annotations_v2')
       .get() as { count: number };
 
     const totalPdfs = this.db
-      .prepare('SELECT COUNT(DISTINCT pdf_id) as count FROM annotations')
+      .prepare('SELECT COUNT(DISTINCT pdf_id) as count FROM annotations_v2')
       .get() as { count: number };
 
     // Get database file size

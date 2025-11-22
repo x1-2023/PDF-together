@@ -8,6 +8,7 @@ interface DashboardProps {
     onUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
     uploading: boolean;
     currentUser: UserProfile | null; // For greeting
+    onOpenSettings: () => void;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
@@ -16,7 +17,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
     onDeletePdf,
     onUpload,
     uploading,
-    currentUser
+    currentUser,
+    onOpenSettings
 }) => {
     return (
         <div className="dashboard-container">
@@ -30,6 +32,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     </p>
                 </div>
                 <div className="header-actions">
+                    <button className="icon-btn settings-trigger" onClick={onOpenSettings} title="Settings">
+                        ⚙️
+                    </button>
                     <label className={`upload-btn-large ${uploading ? 'disabled' : ''}`}>
                         {uploading ? (
                             <span>⏳ Uploading...</span>

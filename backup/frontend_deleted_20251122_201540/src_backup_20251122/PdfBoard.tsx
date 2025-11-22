@@ -1,38 +1,34 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { Stage, Layer, Line, Text, Circle, Rect, Group } from 'react-konva';
 import * as pdfjsLib from 'pdfjs-dist';
-import { Stage, Layer, Line, Text, Circle } from 'react-konva';
 import { v4 as uuidv4 } from 'uuid';
-import { DrawOp, TextOp, UserProfile, Tool } from './types';
+import { DrawOp, TextOp, StickyOp, Tool, UserProfile } from './types';
 
-// Configure pdf.js worker - reference from public folder for Discord CSP compliance
+// Set worker source
 pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
 
-
-
+interface Point {
+  x: number;
+  y: number;
+}
 
 interface PdfBoardProps {
   pdfId: string | null;
   currentPage: number;
   drawOps: DrawOp[];
   textOps: TextOp[];
-  cursors: Record<string, { x: number; y: number; color: string }>;
-  users: Record<string, UserProfile>;
-  // Tool Props
+  stickyOps: StickyOp[];
   currentTool: Tool;
   currentColor: string;
   currentSize: number;
   currentFontSize: number;
-
-  onDraw: (drawOp: Omit<DrawOp, 'userId' | 'ts'>) => void;
-  onText: (textOp: Omit<TextOp, 'userId' | 'ts'>) => void;
-
+  cursors: Record<string, { x: number; y: number; color: string }>;
+  users: Record<string, UserProfile>;
+  onDraw: (op: Omit<DrawOp, 'userId' | 'ts'>) => void;
+  onText: (op: Omit<TextOp, 'userId' | 'ts'>) => void;
+  onSticky: (op: Omit<StickyOp, 'userId' | 'ts'>) => void;
   onDeleteAnnotation: (id: string) => void;
   onCursorMove: (x: number, y: number, color: string) => void;
-}
-
-interface Point {
-  x: number;
-  y: number;
 }
 
 export const PdfBoard: React.FC<PdfBoardProps> = ({
@@ -40,16 +36,16 @@ export const PdfBoard: React.FC<PdfBoardProps> = ({
   currentPage,
   drawOps,
   textOps,
-  cursors,
-  users,
+  stickyOps,
   currentTool,
   currentColor,
   currentSize,
   currentFontSize,
-
+  cursors,
+  users,
   onDraw,
   onText,
-
+  onSticky,
   onDeleteAnnotation,
   onCursorMove,
 }) => {
@@ -58,9 +54,16 @@ export const PdfBoard: React.FC<PdfBoardProps> = ({
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentPath, setCurrentPath] = useState<Point[]>([]);
+
+  // Text Editing State
   const [editingText, setEditingText] = useState<{ x: number; y: number } | null>(null);
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
   const [textInput, setTextInput] = useState('');
+
+  // Sticky Note Editing State
+  const [editingSticky, setEditingSticky] = useState<{ x: number; y: number } | null>(null);
+  const [editingStickyId, setEditingStickyId] = useState<string | null>(null);
+  const [stickyInput, setStickyInput] = useState('');
 
   // Load PDF
   useEffect(() => {
@@ -114,19 +117,21 @@ export const PdfBoard: React.FC<PdfBoardProps> = ({
   // Filter ops for current page
   const currentPageDrawOps = drawOps.filter((op) => op.page === currentPage);
   const currentPageTextOps = textOps.filter((op) => op.page === currentPage);
+  const currentPageStickyOps = (stickyOps || []).filter((op) => op.page === currentPage);
 
   const handleStageClick = (e: any) => {
+    const stage = e.target.getStage();
+    const pos = stage.getPointerPosition();
+
     if (currentTool === 'text') {
-      const stage = e.target.getStage();
-      const pos = stage.getPointerPosition();
       setEditingText({ x: pos.x, y: pos.y });
       setTextInput('');
       setEditingTextId(null); // New text
+    } else if (currentTool === 'sticky') {
+      setEditingSticky({ x: pos.x, y: pos.y });
+      setStickyInput('');
+      setEditingStickyId(null); // New sticky
     } else if (currentTool === 'eraser') {
-      // Check if clicked on any annotation to delete
-      const stage = e.target.getStage();
-      const pos = stage.getPointerPosition();
-
       // Check text annotations
       for (const textOp of currentPageTextOps) {
         const textWidth = textOp.text.length * (textOp.fontSize * 0.6);
@@ -138,6 +143,18 @@ export const PdfBoard: React.FC<PdfBoardProps> = ({
           pos.y <= textOp.y
         ) {
           onDeleteAnnotation(textOp.id);
+          return;
+        }
+      }
+      // Check sticky notes
+      for (const stickyOp of currentPageStickyOps) {
+        if (
+          pos.x >= stickyOp.x &&
+          pos.x <= stickyOp.x + 150 &&
+          pos.y >= stickyOp.y &&
+          pos.y <= stickyOp.y + 150
+        ) {
+          onDeleteAnnotation(stickyOp.id);
           return;
         }
       }
@@ -212,6 +229,30 @@ export const PdfBoard: React.FC<PdfBoardProps> = ({
     setEditingTextId(null);
   };
 
+  const handleStickySubmit = () => {
+    if (!editingSticky || !stickyInput.trim()) {
+      setEditingSticky(null);
+      setStickyInput('');
+      setEditingStickyId(null);
+      return;
+    }
+
+    const stickyOp: Omit<StickyOp, 'userId' | 'ts'> = {
+      id: editingStickyId || uuidv4(),
+      type: 'sticky',
+      page: currentPage,
+      x: editingSticky.x,
+      y: editingSticky.y,
+      text: stickyInput,
+      color: '#fef3c7', // Default yellow sticky color
+    };
+
+    onSticky(stickyOp);
+    setEditingSticky(null);
+    setStickyInput('');
+    setEditingStickyId(null);
+  };
+
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
 
@@ -220,7 +261,6 @@ export const PdfBoard: React.FC<PdfBoardProps> = ({
         position: 'relative',
         boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
         background: '#fff',
-        // Simulate paper look
         width: dimensions.width,
         height: dimensions.height
       }}>
@@ -232,7 +272,7 @@ export const PdfBoard: React.FC<PdfBoardProps> = ({
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           onClick={handleStageClick}
-          style={{ position: 'absolute', top: 0, left: 0, cursor: currentTool === 'text' ? 'text' : currentTool === 'eraser' ? 'crosshair' : 'crosshair' }}
+          style={{ position: 'absolute', top: 0, left: 0, cursor: currentTool === 'text' || currentTool === 'sticky' ? 'text' : currentTool === 'eraser' ? 'crosshair' : 'crosshair' }}
         >
           <Layer>
             {/* Render existing strokes */}
@@ -248,6 +288,42 @@ export const PdfBoard: React.FC<PdfBoardProps> = ({
               />
             ))}
 
+            {/* Render Sticky Notes */}
+            {currentPageStickyOps.map((op) => (
+              <Group
+                key={op.id}
+                x={op.x}
+                y={op.y}
+                onClick={(e) => {
+                  if (currentTool === 'sticky') {
+                    e.cancelBubble = true;
+                    setEditingSticky({ x: op.x, y: op.y });
+                    setStickyInput(op.text);
+                    setEditingStickyId(op.id);
+                  }
+                }}
+              >
+                <Rect
+                  width={150}
+                  height={150}
+                  fill={op.color}
+                  shadowColor="black"
+                  shadowBlur={5}
+                  shadowOpacity={0.2}
+                  shadowOffset={{ x: 2, y: 2 }}
+                />
+                <Text
+                  x={10}
+                  y={10}
+                  width={130}
+                  text={op.text}
+                  fontSize={16}
+                  fill="#000"
+                  fontFamily="'Caveat', cursive"
+                />
+              </Group>
+            ))}
+
             {/* Render existing text annotations */}
             {currentPageTextOps.map((op) => (
               <Text
@@ -257,16 +333,9 @@ export const PdfBoard: React.FC<PdfBoardProps> = ({
                 text={op.text}
                 fontSize={op.fontSize}
                 fill={op.color}
-                fontFamily="Arial"
+                fontFamily="'Caveat', cursive"
+                fontStyle="700"
                 onClick={(e) => {
-                  if (currentTool === 'text') {
-                    e.cancelBubble = true;
-                    setEditingText({ x: op.x, y: op.y });
-                    setTextInput(op.text);
-                    setEditingTextId(op.id);
-                  }
-                }}
-                onTap={(e) => {
                   if (currentTool === 'text') {
                     e.cancelBubble = true;
                     setEditingText({ x: op.x, y: op.y });
@@ -325,14 +394,15 @@ export const PdfBoard: React.FC<PdfBoardProps> = ({
             top: '50%',
             left: '50%',
             transform: 'translate(-50%, -50%)',
-            background: '#2c2f33',
-            padding: '20px',
-            borderRadius: '8px',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+            background: '#FFFFFF',
+            padding: '24px',
+            borderRadius: '12px',
+            boxShadow: '0 10px 25px rgba(0,0,0,0.1)',
             zIndex: 1000,
+            border: '1px solid #E0E0E0',
           }}
         >
-          <h3 style={{ color: '#fff', marginTop: 0 }}>Enter Text</h3>
+          <h3 style={{ color: '#2C3E50', marginTop: 0, fontFamily: "'Merriweather', serif" }}>Enter Text</h3>
           <input
             type="text"
             value={textInput}
@@ -346,28 +416,17 @@ export const PdfBoard: React.FC<PdfBoardProps> = ({
             autoFocus
             style={{
               width: '300px',
-              padding: '10px',
+              padding: '12px',
               fontSize: '16px',
-              border: '1px solid #40444b',
-              borderRadius: '4px',
-              background: '#40444b',
-              color: '#fff',
+              border: '1px solid #E0E0E0',
+              borderRadius: '8px',
+              background: '#F9F7F1',
+              color: '#2C3E50',
+              fontFamily: "'Inter', sans-serif",
+              outline: 'none',
             }}
           />
-          <div style={{ marginTop: '10px', display: 'flex', gap: '10px' }}>
-            <button
-              onClick={handleTextSubmit}
-              style={{
-                padding: '8px 16px',
-                background: '#5865f2',
-                color: '#fff',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-              }}
-            >
-              Add Text
-            </button>
+          <div style={{ marginTop: '16px', display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
             <button
               onClick={() => {
                 setEditingText(null);
@@ -376,26 +435,121 @@ export const PdfBoard: React.FC<PdfBoardProps> = ({
               }}
               style={{
                 padding: '8px 16px',
-                background: '#ed4245',
+                background: 'transparent',
+                color: '#7F8C8D',
+                border: '1px solid #E0E0E0',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontFamily: "'Inter', sans-serif",
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleTextSubmit}
+              style={{
+                padding: '8px 16px',
+                background: '#E67E22',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontFamily: "'Inter', sans-serif",
+                fontWeight: 600,
+              }}
+            >
+              Add Text
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Sticky Note Input Modal */}
+      {editingSticky && (
+        <div
+          style={{
+            position: 'fixed',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            background: '#fef3c7',
+            padding: '24px',
+            borderRadius: '2px', /* Sticky note look */
+            boxShadow: '5px 5px 15px rgba(0,0,0,0.15)',
+            zIndex: 1000,
+            color: '#000',
+            transform: 'rotate(-1deg)',
+          }}
+        >
+          <h3 style={{ marginTop: 0, color: '#d97706', fontFamily: "'Caveat', cursive", fontSize: '1.5rem' }}>Sticky Note</h3>
+          <textarea
+            value={stickyInput}
+            onChange={(e) => setStickyInput(e.target.value)}
+            placeholder="Write something..."
+            autoFocus
+            style={{
+              width: '220px',
+              height: '180px',
+              padding: '12px',
+              fontSize: '18px',
+              border: 'none',
+              background: 'transparent',
+              color: '#2C3E50',
+              fontFamily: "'Caveat', cursive",
+              resize: 'none',
+              outline: 'none',
+            }}
+          />
+          <div style={{ marginTop: '12px', display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+            <button
+              onClick={() => {
+                setEditingSticky(null);
+                setStickyInput('');
+                setEditingStickyId(null);
+              }}
+              style={{
+                padding: '6px 12px',
+                background: 'transparent',
+                color: '#d97706',
+                border: '1px solid #d97706',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontFamily: "'Inter', sans-serif",
+                fontSize: '0.9rem',
+              }}
+            >
+              Discard
+            </button>
+            <button
+              onClick={handleStickySubmit}
+              style={{
+                padding: '6px 16px',
+                background: '#d97706',
                 color: '#fff',
                 border: 'none',
                 borderRadius: '4px',
                 cursor: 'pointer',
+                fontFamily: "'Inter', sans-serif",
+                fontWeight: 600,
+                fontSize: '0.9rem',
               }}
             >
-              Cancel
+              Stick It
             </button>
           </div>
         </div>
       )}
 
       {/* Overlay for modal */}
-      {editingText && (
+      {(editingText || editingSticky) && (
         <div
           onClick={() => {
             setEditingText(null);
             setTextInput('');
             setEditingTextId(null);
+            setEditingSticky(null);
+            setStickyInput('');
+            setEditingStickyId(null);
           }}
           style={{
             position: 'fixed',
@@ -403,7 +557,7 @@ export const PdfBoard: React.FC<PdfBoardProps> = ({
             left: 0,
             right: 0,
             bottom: 0,
-            background: 'rgba(0,0,0,0.7)',
+            background: 'rgba(0,0,0,0.5)',
             zIndex: 999,
           }}
         />

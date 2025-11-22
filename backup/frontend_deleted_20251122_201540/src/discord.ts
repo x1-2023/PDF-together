@@ -4,12 +4,13 @@ let discordSdk: DiscordSDK | null = null;
 
 export async function initializeDiscord() {
   const clientId = import.meta.env.VITE_DISCORD_CLIENT_ID;
+  const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
-  if (!clientId) {
-    console.warn('Discord Client ID not configured, using mock data');
+  if (!clientId || isLocal) {
+    console.warn('Discord Client ID not configured or running locally, using mock data');
     return {
       userId: 'test-user-' + Math.random().toString(36).substr(2, 9),
-      channelId: 'test-channel-' + Math.random().toString(36).substr(2, 9),
+      channelId: 'test-channel',
       username: 'TestUser',
       discriminator: '1234',
       avatar: null,

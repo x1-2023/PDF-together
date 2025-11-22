@@ -69,3 +69,14 @@ export type WSMessage =
   | { type: 'pdf_deleted'; pdfId: string }
   | { type: 'user_joined'; user: UserProfile }
   | { type: 'user_left'; userId: string };
+
+export interface DiscordInfo {
+  userId: string;
+  channelId: string;
+  username: string;
+  discriminator: string;
+  avatar: string | null;
+}
+
+export type Tool = 'draw' | 'text' | 'sticky' | 'eraser';
+
