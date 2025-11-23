@@ -38,6 +38,7 @@ const Reader: React.FC = () => {
   const [sidebarView, setSidebarView] = useState<'list' | 'thumbnail'>('list');
   const [notesOpen, setNotesOpen] = useState(true);
   const [activeTool, setActiveTool] = useState<ToolType>(ToolType.PEN);
+  const [activeColor, setActiveColor] = useState<string>('#EF4444'); // Default Red
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
 
   // Chat & User State
@@ -213,8 +214,11 @@ const Reader: React.FC = () => {
     const handleWheel = (e: WheelEvent) => {
       if (e.ctrlKey) {
         e.preventDefault();
-        const delta = e.deltaY * -0.01;
-        setScale(prev => Math.min(3.0, Math.max(0.5, prev + delta)));
+        // Throttle zoom to avoid too many re-renders
+        requestAnimationFrame(() => {
+          const delta = e.deltaY * -0.005; // Slower zoom speed
+          setScale(prev => Math.min(3.0, Math.max(0.5, prev + delta)));
+        });
       }
     };
 
@@ -289,17 +293,17 @@ const Reader: React.FC = () => {
               {sidebarView === 'list' ? (
                 <span className="text-sm font-bold text-text-muted">Page {index + 1}</span>
               ) : (
-                <div className="w-full aspect-[1/1.4] bg-white overflow-hidden relative pointer-events-none">
-                  <Document file={pdfUrl} className="w-full h-full">
+                <div className="w-full bg-white overflow-hidden relative pointer-events-none rounded-sm">
+                  <Document file={pdfUrl} className="w-full">
                     <Page
                       pageNumber={index + 1}
                       width={180} // Fixed width for thumbnail
                       renderTextLayer={false}
                       renderAnnotationLayer={false}
-                      className="origin-top-left transform scale-50" // Simple scaling hack
+                      className="origin-top-left"
                     />
                   </Document>
-                  <div className="absolute bottom-1 right-1 bg-black/50 text-white text-xs px-1 rounded">
+                  <div className="absolute bottom-1 right-1 bg-black/50 text-white text-xs px-1 rounded z-10">
                     {index + 1}
                   </div>
                 </div>
@@ -377,6 +381,7 @@ const Reader: React.FC = () => {
                       onAnnotationAdd={handleAnnotationAdd}
                       onAnnotationRemove={handleAnnotationRemove}
                       userId={myUserId}
+                      activeColor={activeColor}
                     />
                     {/* Page Number Indicator */}
                     <div className="absolute -left-12 top-4 text-xs font-bold text-text-muted opacity-50">
@@ -391,27 +396,44 @@ const Reader: React.FC = () => {
           </div>
 
           {/* Toolbar */}
-          <div className="fixed bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-1 p-2 bg-surface-light/90 dark:bg-[#18181b]/80 backdrop-blur-2xl rounded-2xl border border-white/20 dark:border-white/10 shadow-2xl z-30">
-            {[
-              { id: ToolType.MOVE, icon: 'pan_tool', label: 'Di chuyển' },
-              { id: ToolType.PEN, icon: 'edit', label: 'Bút vẽ' },
-              { id: ToolType.HIGHLIGHT, icon: 'format_ink_highlighter', label: 'Đánh dấu' },
-              { id: ToolType.TEXT, icon: 'text_fields', label: 'Văn bản' },
-              { id: ToolType.ERASER, icon: 'ink_eraser', label: 'Tẩy' },
-            ].map(tool => (
-              <button
-                key={tool.id}
-                onClick={() => handleToolClick(tool.id)}
-                className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all group relative ${activeTool === tool.id ? 'bg-white text-primary shadow-md' : 'text-text-muted hover:bg-white/10'}`}
-                title={tool.label}
-              >
-                <span className="material-symbols-outlined">{tool.icon}</span>
-                {/* Tooltip */}
-                <span className="absolute -top-10 left-1/2 -translate-x-1/2 px-2 py-1 bg-black/80 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-                  {tool.label}
-                </span>
-              </button>
-            ))}
+          <div className="fixed bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-4 z-30">
+
+            {/* Color Picker (Only show for Pen, Highlight, Text) */}
+            {(activeTool === ToolType.PEN || activeTool === ToolType.HIGHLIGHT || activeTool === ToolType.TEXT) && (
+              <div className="flex items-center gap-2 p-2 bg-surface-light/90 dark:bg-[#18181b]/80 backdrop-blur-xl rounded-full border border-white/20 shadow-lg animate-in slide-in-from-bottom-2 fade-in duration-200">
+                {['#EF4444', '#F59E0B', '#10B981', '#3B82F6', '#6366F1', '#8B5CF6', '#000000', '#FFFFFF'].map(color => (
+                  <button
+                    key={color}
+                    onClick={() => setActiveColor(color)}
+                    className={`w-6 h-6 rounded-full border-2 transition-transform hover:scale-110 ${activeColor === color ? 'border-primary scale-110' : 'border-transparent'}`}
+                    style={{ backgroundColor: color }}
+                  />
+                ))}
+              </div>
+            )}
+
+            <div className="flex items-center gap-1 p-2 bg-surface-light/90 dark:bg-[#18181b]/80 backdrop-blur-2xl rounded-2xl border border-white/20 dark:border-white/10 shadow-2xl">
+              {[
+                { id: ToolType.MOVE, icon: 'pan_tool', label: 'Di chuyển' },
+                { id: ToolType.PEN, icon: 'edit', label: 'Bút vẽ' },
+                { id: ToolType.HIGHLIGHT, icon: 'format_ink_highlighter', label: 'Đánh dấu' },
+                { id: ToolType.TEXT, icon: 'text_fields', label: 'Văn bản' },
+                { id: ToolType.ERASER, icon: 'ink_eraser', label: 'Tẩy' },
+              ].map(tool => (
+                <button
+                  key={tool.id}
+                  onClick={() => handleToolClick(tool.id)}
+                  className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all group relative ${activeTool === tool.id ? 'bg-white text-primary shadow-md' : 'text-text-muted hover:bg-white/10'}`}
+                  title={tool.label}
+                >
+                  <span className="material-symbols-outlined">{tool.icon}</span>
+                  {/* Tooltip */}
+                  <span className="absolute -top-10 left-1/2 -translate-x-1/2 px-2 py-1 bg-black/80 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                    {tool.label}
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
         </main>
       </div>

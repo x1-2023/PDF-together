@@ -8,28 +8,15 @@
         --text-dark: #E5E7EB;
         --text-muted: #9CA3AF;
         --primary: #4F46E5;
-        --secondary: #EC4899;
-        --border-light: #E5E7EB;
-        --border-dark: #374151;
     }
 
-    body {
-        @apply font-body text-text-main antialiased;
+    .shadow-float {
+        box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.1);
     }
+
+    .text-shadow {
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
-
-    @layer utilities {
-        .shadow-soft {
-            box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
-        }
-
-        .shadow-float {
-            box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.1);
-        }
-
-        .text-shadow {
-            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
     }
 
     /* Custom Scrollbar */

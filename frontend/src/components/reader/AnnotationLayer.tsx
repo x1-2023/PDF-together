@@ -9,6 +9,7 @@ interface AnnotationLayerProps {
     onAnnotationAdd: (annotation: Annotation) => void;
     onAnnotationRemove: (annotationId: string) => void;
     userId: string;
+    activeColor: string;
 }
 
 export const AnnotationLayer: React.FC<AnnotationLayerProps> = ({
@@ -18,7 +19,8 @@ export const AnnotationLayer: React.FC<AnnotationLayerProps> = ({
     annotations,
     onAnnotationAdd,
     onAnnotationRemove,
-    userId
+    userId,
+    activeColor
 }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -45,6 +47,24 @@ export const AnnotationLayer: React.FC<AnnotationLayerProps> = ({
             y: (e.clientY - rect.top) / scale
         };
     };
+
+    // Handle Resize
+    useEffect(() => {
+        if (!containerRef.current || !canvasRef.current) return;
+
+        const resizeObserver = new ResizeObserver(() => {
+            if (containerRef.current && canvasRef.current) {
+                const { clientWidth, clientHeight } = containerRef.current;
+                canvasRef.current.width = clientWidth;
+                canvasRef.current.height = clientHeight;
+                // Trigger re-render
+                setIsDrawing(prev => prev);
+            }
+        });
+
+        resizeObserver.observe(containerRef.current);
+        return () => resizeObserver.disconnect();
+    }, []);
 
     // Render annotations
     useEffect(() => {
@@ -81,7 +101,9 @@ export const AnnotationLayer: React.FC<AnnotationLayerProps> = ({
                 ctx.globalAlpha = 1.0;
             } else if (ann.type === 'text') {
                 const textAnn = ann as TextAnnotation;
-                ctx.font = `${textAnn.fontSize}px "${textAnn.fontFamily || 'Inter'}"`;
+                // Ensure font name is quoted if it contains spaces
+                const fontFamily = textAnn.fontFamily || 'Dancing Script';
+                ctx.font = `${textAnn.fontSize}px "${fontFamily}"`;
                 ctx.fillStyle = textAnn.color;
                 ctx.textBaseline = 'top';
 
@@ -113,7 +135,7 @@ export const AnnotationLayer: React.FC<AnnotationLayerProps> = ({
             ctx.moveTo(currentPath[0].x, currentPath[0].y);
             currentPath.forEach(p => ctx.lineTo(p.x, p.y));
 
-            ctx.strokeStyle = activeTool === ToolType.HIGHLIGHT ? '#FFFF00' : '#EF4444'; // Red for pen, Yellow for highlight
+            ctx.strokeStyle = activeTool === ToolType.HIGHLIGHT ? '#FFFF00' : activeColor; // Red for pen, Yellow for highlight
             ctx.lineWidth = activeTool === ToolType.HIGHLIGHT ? 20 : 2;
             ctx.lineCap = 'round';
             ctx.lineJoin = 'round';
@@ -140,7 +162,7 @@ export const AnnotationLayer: React.FC<AnnotationLayerProps> = ({
         }
 
         ctx.restore();
-    }, [annotations, scale, pageNumber, isDrawing, currentPath, activeTool, isDraggingText, textStartPos, textCurrentPos]);
+    }, [annotations, scale, pageNumber, isDrawing, currentPath, activeTool, isDraggingText, textStartPos, textCurrentPos, activeColor]);
 
     // Mouse Handlers
     const handleMouseDown = (e: React.MouseEvent) => {
@@ -204,7 +226,7 @@ export const AnnotationLayer: React.FC<AnnotationLayerProps> = ({
                     page: pageNumber,
                     userId,
                     points: currentPath,
-                    color: activeTool === ToolType.HIGHLIGHT ? '#FFFF00' : '#EF4444',
+                    color: activeTool === ToolType.HIGHLIGHT ? '#FFFF00' : activeColor,
                     width: activeTool === ToolType.HIGHLIGHT ? 20 : 2,
                     opacity: activeTool === ToolType.HIGHLIGHT ? 0.4 : 1.0
                 };
@@ -241,9 +263,9 @@ export const AnnotationLayer: React.FC<AnnotationLayerProps> = ({
                 width: activeTextEditor.width,
                 height: activeTextEditor.height,
                 text,
-                fontSize: 16,
-                color: '#000000',
-                fontFamily: 'Patrick Hand'
+                fontSize: 24, // Larger default for handwriting
+                color: activeColor,
+                fontFamily: 'Dancing Script'
             };
             onAnnotationAdd(newAnnotation);
         }
@@ -253,7 +275,7 @@ export const AnnotationLayer: React.FC<AnnotationLayerProps> = ({
     return (
         <div
             ref={containerRef}
-            className="absolute top-0 left-0 w-full h-full pointer-events-none"
+            className="absolute inset-0 w-full h-full pointer-events-none"
             style={{ zIndex: 10 }}
         >
             <canvas
@@ -279,11 +301,12 @@ export const AnnotationLayer: React.FC<AnnotationLayerProps> = ({
                 >
                     <textarea
                         autoFocus
-                        className="w-full h-full bg-yellow-100/50 border border-blue-500 p-1 resize-none outline-none text-black"
+                        className="w-full h-full bg-transparent border border-blue-500 p-1 resize-none outline-none"
                         style={{
-                            fontFamily: '"Patrick Hand", cursive',
-                            fontSize: `${16 * scale}px`,
-                            lineHeight: 1.2
+                            fontFamily: '"Dancing Script", cursive',
+                            fontSize: `${24 * scale}px`,
+                            lineHeight: 1.2,
+                            color: activeColor
                         }}
                         onBlur={(e) => handleTextSubmit(e.target.value)}
                         onKeyDown={(e) => {
