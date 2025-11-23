@@ -110,7 +110,7 @@ const Reader: React.FC = () => {
     setNumPages(numPages);
   };
 
-  const handleSendMessage = async () => {
+  const handleSendMessage = () => {
     if (!chatInput.trim() || !ws.current) return;
 
     const msgData: ChatMessage = {
@@ -129,64 +129,45 @@ const Reader: React.FC = () => {
       data: msgData
     }));
 
-    // Check if message mentions AI (@AI or @gemini)
-    const mentionsAI = /@(AI|ai|gemini|Gemini)\b/.test(chatInput);
-
-    if (mentionsAI) {
-      // Extract the actual question (remove the mention)
-      const question = chatInput.replace(/@(AI|ai|gemini|Gemini)\s*/g, '').trim();
-
-      // Show loading message
-      const loadingId = Date.now().toString() + 'loading';
-      setMessages(prev => [...prev, {
-        id: loadingId,
-        userId: 'ai',
-        text: '🤔 Đang suy nghĩ...',
-        timestamp: new Date().toLocaleTimeString(),
-        isSystem: true
-      }]);
-
-      try {
-        // Get AI response
-        const response = await aiService.askGemini(question);
-
-        // Replace loading with response
-        setMessages(prev => prev.map(m => m.id === loadingId ? {
-          ...m,
-          text: response,
-          isSystem: false,
-          userId: 'ai'
-        } : m));
-      } catch (error) {
-        // Handle error
-        setMessages(prev => prev.map(m => m.id === loadingId ? {
-          ...m,
-          text: '❌ Xin lỗi, tôi gặp sự cố. Vui lòng thử lại.',
-          isSystem: false,
-          userId: 'ai'
-        } : m));
-      }
-    }
-
     setChatInput("");
   };
 
-  // Tool handlers
-  const handleToolClick = (tool: ToolType) => {
-    setActiveTool(tool);
+  const handleAskAI = async () => {
+    // Get text from current page (mocking selection for now or use window.getSelection())
+    const selection = window.getSelection()?.toString();
+    const context = selection || `Page ${activePage} content...`; // In real app, extract text from PDF layer
 
-    // Show toast for tool selection
-    const toolNames: Record<ToolType, string> = {
-      [ToolType.MOVE]: 'Di chuyển',
-      [ToolType.PEN]: 'Bút vẽ',
-      [ToolType.HIGHLIGHT]: 'Đánh dấu',
-      [ToolType.TEXT]: 'Văn bản',
-      [ToolType.STICKY]: 'Ghi chú',
-      [ToolType.ERASER]: 'Tẩy',
-      [ToolType.AI]: 'AI'
+    // Add user message
+    const userMsg: ChatMessage = {
+      id: Date.now().toString(),
+      userId: myUserId,
+      text: selection ? `Giải thích: "${selection}"` : "Tóm tắt trang này giúp tôi.",
+      timestamp: new Date().toLocaleTimeString(),
     };
+    setMessages(prev => [...prev, userMsg]);
 
-    toast.info(`Đã chọn công cụ: ${toolNames[tool]}`);
+    // Show loading
+    const loadingId = Date.now().toString() + 'loading';
+    setMessages(prev => [...prev, {
+      id: loadingId,
+      userId: 'ai',
+      text: 'Thinking...',
+      timestamp: new Date().toLocaleTimeString(),
+      isSystem: true
+    }]);
+
+    // Call AI
+    const response = selection
+      ? await aiService.explainConcept(selection)
+      : await aiService.summarizeText(context);
+
+    // Replace loading with response
+    setMessages(prev => prev.map(m => m.id === loadingId ? {
+      ...m,
+      text: response,
+      isSystem: false,
+      userId: 'ai' // Special ID for AI
+    } : m));
   };
 
   // Resizing Logic (Simplified for brevity)
@@ -317,23 +298,17 @@ const Reader: React.FC = () => {
           {/* Toolbar */}
           <div className="fixed bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-1 p-2 bg-surface-light/90 dark:bg-[#18181b]/80 backdrop-blur-2xl rounded-2xl border border-white/20 dark:border-white/10 shadow-2xl z-30">
             {[
-              { id: ToolType.MOVE, icon: 'pan_tool', label: 'Di chuyển' },
-              { id: ToolType.PEN, icon: 'edit', label: 'Bút vẽ' },
-              { id: ToolType.HIGHLIGHT, icon: 'format_ink_highlighter', label: 'Đánh dấu' },
-              { id: ToolType.TEXT, icon: 'text_fields', label: 'Văn bản' },
-              { id: ToolType.ERASER, icon: 'ink_eraser', label: 'Tẩy' },
+              { id: ToolType.MOVE, icon: 'pan_tool' },
+              { id: ToolType.PEN, icon: 'edit' },
+              { id: ToolType.HIGHLIGHT, icon: 'format_ink_highlighter' },
+              { id: ToolType.AI, icon: 'smart_toy' }, // AI Tool
             ].map(tool => (
               <button
                 key={tool.id}
-                onClick={() => handleToolClick(tool.id)}
-                className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all group relative ${activeTool === tool.id ? 'bg-white text-primary shadow-md' : 'text-text-muted hover:bg-white/10'}`}
-                title={tool.label}
+                onClick={() => tool.id === ToolType.AI ? handleAskAI() : setActiveTool(tool.id)}
+                className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all ${activeTool === tool.id ? 'bg-white text-primary shadow-md' : 'text-text-muted hover:bg-white/10'}`}
               >
                 <span className="material-symbols-outlined">{tool.icon}</span>
-                {/* Tooltip */}
-                <span className="absolute -top-10 left-1/2 -translate-x-1/2 px-2 py-1 bg-black/80 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-                  {tool.label}
-                </span>
               </button>
             ))}
           </div>
@@ -379,7 +354,7 @@ const Reader: React.FC = () => {
               onChange={(e) => setChatInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
               className="w-full p-3 pr-12 rounded-xl bg-white/50 dark:bg-black/20 border-transparent focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all resize-none text-sm"
-              placeholder="Nhập tin nhắn hoặc @AI để hỏi..."
+              placeholder="Type a message or ask AI..."
               rows={2}
             />
             <button
