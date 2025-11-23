@@ -2,8 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Document, Page, pdfjs } from 'react-pdf';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ToolType, ChatMessage, User, Annotation } from '../types';
-import { AnnotationLayer } from '../components/reader/AnnotationLayer';
+import { ToolType, ChatMessage, User } from '../types';
 import { api } from '../api';
 import { aiService } from '../services/ai';
 import { useToast } from '../hooks/use-toast';
@@ -35,10 +34,8 @@ const Reader: React.FC = () => {
   const [isDraggingLeft, setIsDraggingLeft] = useState(false);
   const [isDraggingRight, setIsDraggingRight] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [sidebarView, setSidebarView] = useState<'list' | 'thumbnail'>('list');
   const [notesOpen, setNotesOpen] = useState(true);
   const [activeTool, setActiveTool] = useState<ToolType>(ToolType.PEN);
-  const [annotations, setAnnotations] = useState<Annotation[]>([]);
 
   // Chat & User State
   const [chatInput, setChatInput] = useState("");
@@ -208,38 +205,6 @@ const Reader: React.FC = () => {
     return () => { window.removeEventListener("mousemove", resize); window.removeEventListener("mouseup", stopResizing); };
   }, [resize]);
 
-  // Zoom Fix (Ctrl + Scroll)
-  useEffect(() => {
-    const handleWheel = (e: WheelEvent) => {
-      if (e.ctrlKey) {
-        e.preventDefault();
-        const delta = e.deltaY * -0.01;
-        setScale(prev => Math.min(3.0, Math.max(0.5, prev + delta)));
-      }
-    };
-
-    const container = mainScrollRef.current;
-    if (container) {
-      container.addEventListener('wheel', handleWheel, { passive: false });
-    }
-
-    return () => {
-      if (container) {
-        container.removeEventListener('wheel', handleWheel);
-      }
-    };
-  }, []);
-
-  const handleAnnotationAdd = (annotation: Annotation) => {
-    setAnnotations(prev => [...prev, annotation]);
-    // TODO: Sync with backend via WebSocket
-  };
-
-  const handleAnnotationRemove = (annotationId: string) => {
-    setAnnotations(prev => prev.filter(a => a.id !== annotationId));
-    // TODO: Sync with backend via WebSocket
-  };
-
   return (
     <div className="flex h-screen w-full bg-background-light text-text-main overflow-hidden font-body select-none">
       <Toaster />
@@ -255,29 +220,13 @@ const Reader: React.FC = () => {
             <span className="material-symbols-outlined text-primary">grid_view</span>
             Pages
           </h3>
-          <div className="flex gap-1">
-            <button
-              onClick={() => setSidebarView('list')}
-              className={`p-1.5 rounded-lg transition-colors ${sidebarView === 'list' ? 'bg-black/10 dark:bg-white/20' : 'hover:bg-black/5 dark:hover:bg-white/10'}`}
-              title="List View"
-            >
-              <span className="material-symbols-outlined text-xl">list</span>
-            </button>
-            <button
-              onClick={() => setSidebarView('thumbnail')}
-              className={`p-1.5 rounded-lg transition-colors ${sidebarView === 'thumbnail' ? 'bg-black/10 dark:bg-white/20' : 'hover:bg-black/5 dark:hover:bg-white/10'}`}
-              title="Thumbnail View"
-            >
-              <span className="material-symbols-outlined text-xl">grid_on</span>
-            </button>
-            <button onClick={() => setSidebarOpen(false)} className="p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 text-text-muted transition-colors ml-2">
-              <span className="material-symbols-outlined text-xl">first_page</span>
-            </button>
-          </div>
+          <button onClick={() => setSidebarOpen(false)} className="p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 text-text-muted transition-colors">
+            <span className="material-symbols-outlined text-xl">first_page</span>
+          </button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {pdfUrl && Array.from(new Array(numPages), (el, index) => (
+          {Array.from(new Array(numPages), (el, index) => (
             <div
               key={`thumb_${index + 1}`}
               onClick={() => {
@@ -286,24 +235,8 @@ const Reader: React.FC = () => {
               }}
               className={`relative group cursor-pointer transition-all duration-200 p-2 rounded-lg border-2 ${activePage === index + 1 ? 'border-primary bg-primary/5' : 'border-transparent hover:bg-black/5'}`}
             >
-              {sidebarView === 'list' ? (
-                <span className="text-sm font-bold text-text-muted">Page {index + 1}</span>
-              ) : (
-                <div className="w-full aspect-[1/1.4] bg-white overflow-hidden relative pointer-events-none">
-                  <Document file={pdfUrl} className="w-full h-full">
-                    <Page
-                      pageNumber={index + 1}
-                      width={180} // Fixed width for thumbnail
-                      renderTextLayer={false}
-                      renderAnnotationLayer={false}
-                      className="origin-top-left transform scale-50" // Simple scaling hack
-                    />
-                  </Document>
-                  <div className="absolute bottom-1 right-1 bg-black/50 text-white text-xs px-1 rounded">
-                    {index + 1}
-                  </div>
-                </div>
-              )}
+              <span className="text-sm font-bold text-text-muted">Page {index + 1}</span>
+              {/* Thumbnail rendering could go here */}
             </div>
           ))}
         </div>
@@ -368,15 +301,6 @@ const Reader: React.FC = () => {
                       renderTextLayer={true}
                       renderAnnotationLayer={true}
                       className="bg-white"
-                    />
-                    <AnnotationLayer
-                      pageNumber={index + 1}
-                      scale={scale}
-                      activeTool={activeTool}
-                      annotations={annotations}
-                      onAnnotationAdd={handleAnnotationAdd}
-                      onAnnotationRemove={handleAnnotationRemove}
-                      userId={myUserId}
                     />
                     {/* Page Number Indicator */}
                     <div className="absolute -left-12 top-4 text-xs font-bold text-text-muted opacity-50">

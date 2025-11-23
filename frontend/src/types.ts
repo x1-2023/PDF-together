@@ -38,3 +38,34 @@ export interface Page {
   thumbnailUrl: string;
   fullUrl: string;
 }
+
+export type AnnotationType = 'path' | 'text' | 'highlight';
+
+export interface BaseAnnotation {
+  id: string;
+  type: AnnotationType;
+  page: number;
+  userId: string;
+}
+
+export interface PathAnnotation extends BaseAnnotation {
+  type: 'path' | 'highlight';
+  points: { x: number; y: number }[];
+  color: string;
+  width: number;
+  opacity: number;
+}
+
+export interface TextAnnotation extends BaseAnnotation {
+  type: 'text';
+  x: number;
+  y: number;
+  width?: number;
+  height?: number;
+  text: string;
+  fontSize: number;
+  color: string;
+  fontFamily?: string;
+}
+
+export type Annotation = PathAnnotation | TextAnnotation;
