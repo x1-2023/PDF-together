@@ -50,14 +50,26 @@ export interface UserProfile {
   avatar: string | null;
 }
 
+export interface ChatMessage {
+  id: string;
+  userId: string;
+  text: string;
+  timestamp: string;
+  isSystem?: boolean;
+}
+
 export type WSMessage =
   | { type: 'set_pdf'; pdfId: string | null }
   | { type: 'change_page'; page: number }
   | { type: 'snapshot'; data: RoomState }
+  | { type: 'draw'; id: string; page: number; path: { x: number; y: number }[]; color: string; size: number }
   | { type: 'draw_broadcast'; op: DrawOp }
+  | { type: 'text'; id: string; page: number; x: number; y: number; text: string; color: string; fontSize: number }
   | { type: 'text_broadcast'; op: TextOp }
   | { type: 'sticky_broadcast'; op: StickyOp }
+  | { type: 'clear_page'; page: number }
   | { type: 'clear_page_broadcast'; page: number }
+  | { type: 'delete_annotation'; id: string }
   | { type: 'delete_annotation_broadcast'; id: string }
   | {
     type: 'cursor';
@@ -68,4 +80,5 @@ export type WSMessage =
   }
   | { type: 'pdf_deleted'; pdfId: string }
   | { type: 'user_joined'; user: UserProfile }
-  | { type: 'user_left'; userId: string };
+  | { type: 'user_left'; userId: string }
+  | { type: 'chat'; data: ChatMessage };

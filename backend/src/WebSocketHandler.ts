@@ -101,7 +101,9 @@ export class WebSocketHandler {
 
     switch (message.type) {
       case 'set_pdf':
-        this.roomManager.setPdf(channelId, message.pdfId);
+        if (message.pdfId) {
+          this.roomManager.setPdf(channelId, message.pdfId);
+        }
         this.broadcastToRoom(channelId, {
           type: 'set_pdf',
           pdfId: message.pdfId,
@@ -173,6 +175,11 @@ export class WebSocketHandler {
       case 'cursor':
         // Broadcast cursor position to all other clients in the room
         // We don't store cursors in DB as they are ephemeral
+        this.broadcastToRoom(channelId, message, ws);
+        break;
+
+      case 'chat':
+        // Broadcast chat message to all other clients
         this.broadcastToRoom(channelId, message, ws);
         break;
     }

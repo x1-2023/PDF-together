@@ -1,0 +1,377 @@
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { Document, Page, pdfjs } from 'react-pdf';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ToolType, ChatMessage, User } from '../types';
+import { api } from '../api';
+import { aiService } from '../services/ai';
+import { useToast } from '../hooks/use-toast';
+import { Toaster } from '../components/ui/toaster';
+
+// Setup PDF Worker
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.mjs',
+  import.meta.url,
+).toString();
+
+import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
+import 'react-pdf/dist/esm/Page/TextLayer.css';
+
+const Reader: React.FC = () => {
+  const navigate = useNavigate();
+  const { id } = useParams();
+  const { toast } = useToast();
+
+  // PDF State
+  const [numPages, setNumPages] = useState<number>(0);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [scale, setScale] = useState(1.0);
+  const [activePage, setActivePage] = useState(1);
+
+  // UI State
+  const [leftSidebarWidth, setLeftSidebarWidth] = useState(250);
+  const [rightSidebarWidth, setRightSidebarWidth] = useState(320);
+  const [isDraggingLeft, setIsDraggingLeft] = useState(false);
+  const [isDraggingRight, setIsDraggingRight] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [notesOpen, setNotesOpen] = useState(true);
+  const [activeTool, setActiveTool] = useState<ToolType>(ToolType.PEN);
+
+  // Chat & User State
+  const [chatInput, setChatInput] = useState("");
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [onlineUsers, setOnlineUsers] = useState<User[]>([]);
+  const ws = useRef<WebSocket | null>(null);
+  const [myUserId] = useState(() => Math.random().toString(36).substr(2, 9)); // Temporary ID
+
+  // Refs
+  const mainScrollRef = useRef<HTMLDivElement>(null);
+  const pageRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+  // Load PDF URL
+  useEffect(() => {
+    if (id) {
+      // In a real app, we might fetch metadata first, but here we construct URL directly
+      // or fetch from API if needed. For now assuming /pdf/:id works as per backend.
+      setPdfUrl(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/pdf/${id}`);
+    }
+  }, [id]);
+
+  // WebSocket Connection
+  useEffect(() => {
+    if (!id) return;
+
+    const wsUrl = `ws://${window.location.hostname}:3001/ws?channelId=${id}&userId=${myUserId}&username=User-${myUserId.substr(0, 4)}`;
+    const socket = new WebSocket(wsUrl);
+
+    socket.onopen = () => {
+      console.log('Connected to WebSocket');
+      toast.success("Đã kết nối vào phòng học.");
+    };
+
+    socket.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        handleWebSocketMessage(msg);
+      } catch (e) {
+        console.error("WS Parse Error", e);
+      }
+    };
+
+    socket.onclose = () => {
+      console.log('Disconnected from WebSocket');
+      // toast.error("Mất kết nối máy chủ.");
+    };
+
+    ws.current = socket;
+
+    return () => {
+      socket.close();
+    };
+  }, [id, myUserId]);
+
+  const handleWebSocketMessage = (msg: any) => {
+    switch (msg.type) {
+      case 'chat':
+        setMessages(prev => [...prev, msg.data]);
+        break;
+      case 'user_joined':
+        setOnlineUsers(prev => {
+          if (prev.find(u => u.id === msg.user.id)) return prev;
+          return [...prev, msg.user];
+        });
+        toast.info(`${msg.user.username} đã tham gia.`);
+        break;
+      // Handle other types (draw, etc.)
+    }
+  };
+
+  const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
+    setNumPages(numPages);
+  };
+
+  const handleSendMessage = () => {
+    if (!chatInput.trim() || !ws.current) return;
+
+    const msgData: ChatMessage = {
+      id: Date.now().toString(),
+      userId: myUserId,
+      text: chatInput,
+      timestamp: new Date().toLocaleTimeString(),
+      isSystem: false
+    };
+
+    // Optimistic update
+    setMessages(prev => [...prev, msgData]);
+
+    ws.current.send(JSON.stringify({
+      type: 'chat',
+      data: msgData
+    }));
+
+    setChatInput("");
+  };
+
+  const handleAskAI = async () => {
+    // Get text from current page (mocking selection for now or use window.getSelection())
+    const selection = window.getSelection()?.toString();
+    const context = selection || `Page ${activePage} content...`; // In real app, extract text from PDF layer
+
+    // Add user message
+    const userMsg: ChatMessage = {
+      id: Date.now().toString(),
+      userId: myUserId,
+      text: selection ? `Giải thích: "${selection}"` : "Tóm tắt trang này giúp tôi.",
+      timestamp: new Date().toLocaleTimeString(),
+    };
+    setMessages(prev => [...prev, userMsg]);
+
+    // Show loading
+    const loadingId = Date.now().toString() + 'loading';
+    setMessages(prev => [...prev, {
+      id: loadingId,
+      userId: 'ai',
+      text: 'Thinking...',
+      timestamp: new Date().toLocaleTimeString(),
+      isSystem: true
+    }]);
+
+    // Call AI
+    const response = selection
+      ? await aiService.explainConcept(selection)
+      : await aiService.summarizeText(context);
+
+    // Replace loading with response
+    setMessages(prev => prev.map(m => m.id === loadingId ? {
+      ...m,
+      text: response,
+      isSystem: false,
+      userId: 'ai' // Special ID for AI
+    } : m));
+  };
+
+  // Resizing Logic (Simplified for brevity)
+  const startResizingLeft = () => setIsDraggingLeft(true);
+  const startResizingRight = () => setIsDraggingRight(true);
+  const stopResizing = () => { setIsDraggingLeft(false); setIsDraggingRight(false); };
+
+  const resize = useCallback((e: MouseEvent) => {
+    if (isDraggingLeft) setLeftSidebarWidth(Math.max(180, Math.min(500, e.clientX)));
+    if (isDraggingRight) setRightSidebarWidth(Math.max(280, Math.min(600, document.body.clientWidth - e.clientX)));
+  }, [isDraggingLeft, isDraggingRight]);
+
+  useEffect(() => {
+    window.addEventListener("mousemove", resize);
+    window.addEventListener("mouseup", stopResizing);
+    return () => { window.removeEventListener("mousemove", resize); window.removeEventListener("mouseup", stopResizing); };
+  }, [resize]);
+
+  return (
+    <div className="flex h-screen w-full bg-background-light text-text-main overflow-hidden font-body select-none">
+      <Toaster />
+
+      {/* --- Left Sidebar (Thumbnails) --- */}
+      <motion.aside
+        initial={false}
+        animate={{ width: sidebarOpen ? leftSidebarWidth : 0 }}
+        className="flex-shrink-0 bg-surface-light/95 dark:bg-[#2A251F]/90 backdrop-blur-xl border-r border-border-light dark:border-border-dark shadow-lg relative flex flex-col z-20 overflow-hidden"
+      >
+        <div className="flex items-center justify-between p-4 border-b border-border-light/50 dark:border-border-dark/50 min-w-[200px]">
+          <h3 className="font-display font-bold text-lg text-text-main dark:text-white whitespace-nowrap flex items-center gap-2">
+            <span className="material-symbols-outlined text-primary">grid_view</span>
+            Pages
+          </h3>
+          <button onClick={() => setSidebarOpen(false)} className="p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 text-text-muted transition-colors">
+            <span className="material-symbols-outlined text-xl">first_page</span>
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {Array.from(new Array(numPages), (el, index) => (
+            <div
+              key={`thumb_${index + 1}`}
+              onClick={() => {
+                setActivePage(index + 1);
+                pageRefs.current[index]?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className={`relative group cursor-pointer transition-all duration-200 p-2 rounded-lg border-2 ${activePage === index + 1 ? 'border-primary bg-primary/5' : 'border-transparent hover:bg-black/5'}`}
+            >
+              <span className="text-sm font-bold text-text-muted">Page {index + 1}</span>
+              {/* Thumbnail rendering could go here */}
+            </div>
+          ))}
+        </div>
+
+        {/* Drag Handle */}
+        <div onMouseDown={startResizingLeft} className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-primary/50 transition-colors" />
+      </motion.aside>
+
+      {/* --- Main Content --- */}
+      <div className="flex-1 flex flex-col relative bg-background-light dark:bg-background-dark overflow-hidden min-w-0 transition-colors duration-300">
+
+        {/* Header */}
+        <header className="h-16 shrink-0 flex items-center justify-between px-4 border-b border-border-light/50 dark:border-border-dark/50 bg-surface-light/80 dark:bg-black/40 backdrop-blur-xl z-20">
+          <div className="flex items-center gap-3">
+            <button onClick={() => navigate('/')} className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors">
+              <span className="material-symbols-outlined text-text-main dark:text-white">arrow_back</span>
+            </button>
+            {!sidebarOpen && (
+              <button onClick={() => setSidebarOpen(true)} className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/10">
+                <span className="material-symbols-outlined">last_page</span>
+              </button>
+            )}
+            <div className="h-6 w-px bg-border-light/60 dark:bg-border-dark/60 mx-2"></div>
+            <span className="font-display font-bold text-sm tracking-wide text-text-main dark:text-white truncate opacity-80">Document Viewer</span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 mr-4 bg-surface-light/50 dark:bg-black/30 px-1 py-1 rounded-lg border border-border-light dark:border-border-dark shadow-sm">
+              <button onClick={() => setScale(s => Math.max(0.5, s - 0.1))} className="p-1 hover:bg-black/5 rounded"><span className="material-symbols-outlined text-sm">remove</span></button>
+              <span className="w-12 text-center font-mono text-sm">{Math.round(scale * 100)}%</span>
+              <button onClick={() => setScale(s => Math.min(2.0, s + 0.1))} className="p-1 hover:bg-black/5 rounded"><span className="material-symbols-outlined text-sm">add</span></button>
+            </div>
+
+            <button
+              onClick={() => setNotesOpen(!notesOpen)}
+              className={`p-2 rounded-full ${notesOpen ? 'bg-primary text-white' : 'bg-surface-light text-text-main'} border border-border-light shadow-sm transition-all`}
+            >
+              <span className="material-symbols-outlined">chat</span>
+            </button>
+          </div>
+        </header>
+
+        {/* PDF Canvas */}
+        <main ref={mainScrollRef} className="flex-1 relative overflow-y-auto overflow-x-hidden scroll-smooth p-8 bg-gray-100 dark:bg-gray-900">
+          <div className="flex flex-col items-center gap-8 min-h-full">
+            {pdfUrl ? (
+              <Document
+                file={pdfUrl}
+                onLoadSuccess={onDocumentLoadSuccess}
+                loading={<div className="animate-pulse text-text-muted">Loading PDF...</div>}
+                error={<div className="text-red-500">Failed to load PDF.</div>}
+              >
+                {Array.from(new Array(numPages), (el, index) => (
+                  <div
+                    key={`page_${index + 1}`}
+                    ref={el => { pageRefs.current[index] = el; }}
+                    className="relative shadow-lg"
+                  >
+                    <Page
+                      pageNumber={index + 1}
+                      scale={scale}
+                      renderTextLayer={true}
+                      renderAnnotationLayer={true}
+                      className="bg-white"
+                    />
+                    {/* Page Number Indicator */}
+                    <div className="absolute -left-12 top-4 text-xs font-bold text-text-muted opacity-50">
+                      {index + 1}
+                    </div>
+                  </div>
+                ))}
+              </Document>
+            ) : (
+              <div className="text-text-muted">No PDF loaded</div>
+            )}
+          </div>
+
+          {/* Toolbar */}
+          <div className="fixed bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-1 p-2 bg-surface-light/90 dark:bg-[#18181b]/80 backdrop-blur-2xl rounded-2xl border border-white/20 dark:border-white/10 shadow-2xl z-30">
+            {[
+              { id: ToolType.MOVE, icon: 'pan_tool' },
+              { id: ToolType.PEN, icon: 'edit' },
+              { id: ToolType.HIGHLIGHT, icon: 'format_ink_highlighter' },
+              { id: ToolType.AI, icon: 'smart_toy' }, // AI Tool
+            ].map(tool => (
+              <button
+                key={tool.id}
+                onClick={() => tool.id === ToolType.AI ? handleAskAI() : setActiveTool(tool.id)}
+                className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all ${activeTool === tool.id ? 'bg-white text-primary shadow-md' : 'text-text-muted hover:bg-white/10'}`}
+              >
+                <span className="material-symbols-outlined">{tool.icon}</span>
+              </button>
+            ))}
+          </div>
+        </main>
+      </div>
+
+      {/* --- Right Sidebar (Chat & AI) --- */}
+      <motion.aside
+        initial={false}
+        animate={{ width: notesOpen ? rightSidebarWidth : 0 }}
+        className="flex-shrink-0 bg-surface-light/95 dark:bg-[#2A251F]/90 backdrop-blur-xl border-l border-border-light dark:border-border-dark shadow-2xl flex flex-col relative z-20 overflow-hidden"
+      >
+        <div className="p-4 border-b border-border-light/50 flex justify-between items-center min-w-[200px]">
+          <h3 className="font-bold text-lg text-text-main dark:text-white">Chat & AI</h3>
+          <button onClick={() => setNotesOpen(false)}><span className="material-symbols-outlined">close</span></button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {messages.map((msg) => (
+            <div key={msg.id} className={`flex flex-col ${msg.userId === myUserId ? 'items-end' : 'items-start'}`}>
+              <div className={`flex items-center gap-2 mb-1 ${msg.userId === myUserId ? 'flex-row-reverse' : ''}`}>
+                <span className="text-xs font-bold opacity-70">
+                  {msg.userId === 'ai' ? '✨ Gemini AI' : (msg.userId === myUserId ? 'You' : msg.userId)}
+                </span>
+                <span className="text-[10px] text-text-muted">{msg.timestamp}</span>
+              </div>
+              <div className={`p-3 rounded-2xl text-sm max-w-[90%] break-words shadow-sm border ${msg.userId === 'ai'
+                ? 'bg-gradient-to-br from-purple-500/10 to-indigo-500/10 border-purple-200 dark:border-purple-800 text-text-main dark:text-white'
+                : msg.userId === myUserId
+                  ? 'bg-primary text-white border-primary'
+                  : 'bg-white dark:bg-white/5 border-border-light'
+                }`}>
+                {msg.text}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="p-4 bg-surface-light dark:bg-[#2A251F] border-t border-border-light">
+          <div className="relative">
+            <textarea
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
+              className="w-full p-3 pr-12 rounded-xl bg-white/50 dark:bg-black/20 border-transparent focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all resize-none text-sm"
+              placeholder="Type a message or ask AI..."
+              rows={2}
+            />
+            <button
+              onClick={handleSendMessage}
+              disabled={!chatInput.trim()}
+              className="absolute right-2 bottom-2 p-2 rounded-lg bg-text-main dark:bg-white text-white dark:text-text-main shadow-md hover:scale-105 transition-all"
+            >
+              <span className="material-symbols-outlined text-lg">send</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Drag Handle */}
+        <div onMouseDown={startResizingRight} className="absolute top-0 left-0 w-1 h-full cursor-col-resize hover:bg-primary/50 transition-colors" />
+      </motion.aside>
+    </div>
+  );
+};
+
+export default Reader;
