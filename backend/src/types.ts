@@ -5,6 +5,7 @@ export interface DrawOp {
   path: { x: number; y: number }[];
   color: string;
   size: number;
+  opacity: number;
   userId: string;
   ts: number;
 }
@@ -15,9 +16,12 @@ export interface TextOp {
   page: number;
   x: number;
   y: number;
+  width?: number;
+  height?: number;
   text: string;
   color: string;
   fontSize: number;
+  fontFamily?: string;
   userId: string;
   ts: number;
 }
@@ -62,9 +66,9 @@ export type WSMessage =
   | { type: 'set_pdf'; pdfId: string | null }
   | { type: 'change_page'; page: number }
   | { type: 'snapshot'; data: RoomState }
-  | { type: 'draw'; id: string; page: number; path: { x: number; y: number }[]; color: string; size: number }
+  | { type: 'draw'; id: string; page: number; path: { x: number; y: number }[]; color: string; size: number; opacity: number }
   | { type: 'draw_broadcast'; op: DrawOp }
-  | { type: 'text'; id: string; page: number; x: number; y: number; text: string; color: string; fontSize: number }
+  | { type: 'text'; id: string; page: number; x: number; y: number; width?: number; height?: number; text: string; color: string; fontSize: number; fontFamily?: string }
   | { type: 'text_broadcast'; op: TextOp }
   | { type: 'sticky_broadcast'; op: StickyOp }
   | { type: 'clear_page'; page: number }

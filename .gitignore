@@ -40,3 +40,5 @@ SECURITY-SETUP.md
 SETUP.md
 SQLITE*.md
 TROUBLESHOOTING.md
+
+backend/data/*.db

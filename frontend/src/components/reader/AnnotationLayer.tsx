@@ -24,10 +24,17 @@ export const AnnotationLayer: React.FC<AnnotationLayerProps> = ({
 }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
+
+    // Drawing state
     const [isDrawing, setIsDrawing] = useState(false);
     const [currentPath, setCurrentPath] = useState<{ x: number; y: number }[]>([]);
 
-    // Text Tool State
+    // Move tool state
+    const [isMoving, setIsMoving] = useState(false);
+    const [movingAnnotationId, setMovingAnnotationId] = useState<string | null>(null);
+    const [moveStartPos, setMoveStartPos] = useState<{ x: number; y: number } | null>(null);
+
+    // Text tool state
     const [isDraggingText, setIsDraggingText] = useState(false);
     const [textStartPos, setTextStartPos] = useState<{ x: number; y: number } | null>(null);
     const [textCurrentPos, setTextCurrentPos] = useState<{ x: number; y: number } | null>(null);
@@ -36,10 +43,14 @@ export const AnnotationLayer: React.FC<AnnotationLayerProps> = ({
         y: number;
         width: number;
         height: number;
+        annotationId?: string;
     } | null>(null);
+    const [editingText, setEditingText] = useState("");
 
-    // Helper to get coordinates relative to canvas
-    const getCoords = (e: React.MouseEvent | MouseEvent) => {
+    const [forceRender, setForceRender] = useState(0);
+
+    // Helper to get coordinates
+    const getCoords = (e: React.MouseEvent) => {
         if (!canvasRef.current) return { x: 0, y: 0 };
         const rect = canvasRef.current.getBoundingClientRect();
         return {
@@ -48,175 +59,292 @@ export const AnnotationLayer: React.FC<AnnotationLayerProps> = ({
         };
     };
 
-    // Handle Resize
+    // Load Dancing Script font
+    useEffect(() => {
+        if (document.fonts) {
+            document.fonts.load('20px "Dancing Script"').then(() => {
+                setForceRender(prev => prev + 1);
+            }).catch(err => {
+                console.error('Failed to load Dancing Script font:', err);
+            });
+
+            // Also listen for ready promise
+            document.fonts.ready.then(() => {
+                setForceRender(prev => prev + 1);
+            });
+        }
+    }, []);
+
+    // We need a state to track canvas size changes to trigger re-render
+    const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
+
+    // Update canvas size with ResizeObserver
     useEffect(() => {
         if (!containerRef.current || !canvasRef.current) return;
 
-        const resizeObserver = new ResizeObserver(() => {
+        const updateSize = () => {
             if (containerRef.current && canvasRef.current) {
                 const { clientWidth, clientHeight } = containerRef.current;
-                canvasRef.current.width = clientWidth;
-                canvasRef.current.height = clientHeight;
-                // Trigger re-render
-                setIsDrawing(prev => prev);
+                if (clientWidth > 0 && clientHeight > 0 && (canvasRef.current.width !== clientWidth || canvasRef.current.height !== clientHeight)) {
+                    canvasRef.current.width = clientWidth;
+                    canvasRef.current.height = clientHeight;
+                    setCanvasSize({ width: clientWidth, height: clientHeight });
+                }
             }
-        });
+        };
 
+        const resizeObserver = new ResizeObserver(updateSize);
         resizeObserver.observe(containerRef.current);
-        return () => resizeObserver.disconnect();
-    }, []);
+
+        updateSize();
+
+        return () => {
+            resizeObserver.disconnect();
+        };
+    }, [scale]);
 
     // Render annotations
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
 
-        // Clear canvas
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const render = () => {
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return;
 
-        // Scale context
-        ctx.save();
-        ctx.scale(scale, scale);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.save();
+            ctx.scale(scale, scale);
 
-        // Render all annotations
-        annotations.forEach(ann => {
-            if (ann.page !== pageNumber) return;
+            // Render existing annotations
+            if (Array.isArray(annotations)) {
+                annotations.forEach(ann => {
+                    if (ann.page !== pageNumber) return;
 
-            if (ann.type === 'path' || ann.type === 'highlight') {
-                const pathAnn = ann as PathAnnotation;
-                if (pathAnn.points.length < 2) return;
+                    if (ann.type === 'path' || ann.type === 'highlight') {
+                        const pathAnn = ann as PathAnnotation;
+                        if (pathAnn.points.length < 2) return;
 
-                ctx.beginPath();
-                ctx.moveTo(pathAnn.points[0].x, pathAnn.points[0].y);
-                pathAnn.points.forEach(p => ctx.lineTo(p.x, p.y));
+                        ctx.beginPath();
+                        ctx.moveTo(pathAnn.points[0].x, pathAnn.points[0].y);
+                        pathAnn.points.forEach(p => ctx.lineTo(p.x, p.y));
 
-                ctx.strokeStyle = pathAnn.color;
-                ctx.lineWidth = pathAnn.width;
-                ctx.lineCap = 'round';
-                ctx.lineJoin = 'round';
-                ctx.globalAlpha = pathAnn.opacity;
-                ctx.stroke();
-                ctx.globalAlpha = 1.0;
-            } else if (ann.type === 'text') {
-                const textAnn = ann as TextAnnotation;
-                // Ensure font name is quoted if it contains spaces
-                const fontFamily = textAnn.fontFamily || 'Dancing Script';
-                ctx.font = `${textAnn.fontSize}px "${fontFamily}"`;
-                ctx.fillStyle = textAnn.color;
-                ctx.textBaseline = 'top';
+                        ctx.strokeStyle = pathAnn.color;
+                        ctx.lineWidth = pathAnn.width;
+                        ctx.lineCap = 'round';
+                        ctx.lineJoin = 'round';
+                        ctx.globalAlpha = pathAnn.opacity;
+                        ctx.stroke();
+                        ctx.globalAlpha = 1.0;
+                    } else if (ann.type === 'text') {
+                        const textAnn = ann as TextAnnotation;
+                        const fontFamily = textAnn.fontFamily || 'Dancing Script';
+                        const fontSize = textAnn.fontSize || 20;
 
-                // Simple text wrapping
-                const words = textAnn.text.split(' ');
-                let line = '';
-                let y = textAnn.y;
-                const lineHeight = textAnn.fontSize * 1.2;
-                const maxWidth = textAnn.width || 200;
+                        ctx.font = `${fontSize}px "${fontFamily}", cursive`;
+                        if (fontFamily === 'Arial') {
+                            ctx.font = `${fontSize}px Arial, sans-serif`;
 
-                words.forEach(word => {
-                    const testLine = line + word + ' ';
-                    const metrics = ctx.measureText(testLine);
-                    if (metrics.width > maxWidth && line !== '') {
-                        ctx.fillText(line, textAnn.x, y);
-                        line = word + ' ';
-                        y += lineHeight;
-                    } else {
-                        line = testLine;
+                            // Draw sticky note background
+                            const padding = 10;
+                            const width = textAnn.width || 200;
+                            const height = textAnn.height || 100;
+
+                            ctx.save();
+                            ctx.fillStyle = '#FEF3C7'; // yellow-100
+                            ctx.shadowColor = 'rgba(0, 0, 0, 0.1)';
+                            ctx.shadowBlur = 10;
+                            ctx.shadowOffsetX = 0;
+                            ctx.shadowOffsetY = 4;
+                            ctx.fillRect(textAnn.x, textAnn.y, width, height);
+
+                            // Draw border
+                            ctx.strokeStyle = '#FBBF24'; // yellow-400
+                            ctx.lineWidth = 1;
+                            ctx.strokeRect(textAnn.x, textAnn.y, width, height);
+                            ctx.restore();
+
+                            // Adjust text position for padding
+                            ctx.fillStyle = '#000000';
+                            ctx.textBaseline = 'top';
+
+                            // Simple text wrapping
+                            const words = textAnn.text.split(' ');
+                            let line = '';
+                            let y = textAnn.y + padding;
+                            const lineHeight = fontSize * 1.2;
+                            const maxWidth = width - (padding * 2);
+
+                            for (let n = 0; n < words.length; n++) {
+                                const testLine = line + words[n] + ' ';
+                                const metrics = ctx.measureText(testLine);
+                                const testWidth = metrics.width;
+                                if (testWidth > maxWidth && n > 0) {
+                                    ctx.fillText(line, textAnn.x + padding, y);
+                                    line = words[n] + ' ';
+                                    y += lineHeight;
+                                }
+                                else {
+                                    line = testLine;
+                                }
+                            }
+                            ctx.fillText(line, textAnn.x + padding, y);
+
+                        } else {
+                            ctx.fillStyle = textAnn.color;
+                            ctx.textBaseline = 'top';
+                            ctx.fillText(textAnn.text, textAnn.x, textAnn.y);
+                        }
                     }
                 });
-                ctx.fillText(line, textAnn.x, y);
             }
+
+            // Render current drawing path
+            if (isDrawing && currentPath.length > 0) {
+                ctx.beginPath();
+                ctx.moveTo(currentPath[0].x, currentPath[0].y);
+                currentPath.forEach(p => ctx.lineTo(p.x, p.y));
+
+                ctx.strokeStyle = activeTool === ToolType.HIGHLIGHT ? '#FFFF00' : activeColor;
+                ctx.lineWidth = activeTool === ToolType.HIGHLIGHT ? 20 : 2;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.globalAlpha = activeTool === ToolType.HIGHLIGHT ? 0.4 : 1.0;
+                ctx.stroke();
+                ctx.globalAlpha = 1.0;
+            }
+
+            // Render text selection box
+            if (isDraggingText && textStartPos && textCurrentPos) {
+                const x = Math.min(textStartPos.x, textCurrentPos.x);
+                const y = Math.min(textStartPos.y, textCurrentPos.y);
+                const w = Math.abs(textCurrentPos.x - textStartPos.x);
+                const h = Math.abs(textCurrentPos.y - textStartPos.y);
+
+                ctx.strokeStyle = '#4F46E5';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([5, 5]);
+                ctx.strokeRect(x, y, w, h);
+                ctx.setLineDash([]);
+
+                ctx.fillStyle = 'rgba(79, 70, 229, 0.1)';
+                ctx.fillRect(x, y, w, h);
+            }
+
+            ctx.restore();
+        };
+
+        // Use requestAnimationFrame to ensure we draw after layout updates
+        const rAF = requestAnimationFrame(render);
+
+        return () => {
+            cancelAnimationFrame(rAF);
+        };
+
+    }, [annotations, scale, pageNumber, isDrawing, currentPath, activeTool, isDraggingText, textStartPos, textCurrentPos, activeColor, canvasSize, forceRender]);
+
+    // Brush eraser helper
+    const eraseAtPosition = (coords: { x: number; y: number }) => {
+        const hitRadius = 15 / scale; // Brush size
+        const hitAnnotation = annotations.find(ann => {
+            if (ann.page !== pageNumber) return false;
+            if (ann.type === 'path' || ann.type === 'highlight') {
+                const pathAnn = ann as PathAnnotation;
+                return pathAnn.points.some(p =>
+                    Math.abs(p.x - coords.x) < hitRadius && Math.abs(p.y - coords.y) < hitRadius
+                );
+            } else if (ann.type === 'text') {
+                const textAnn = ann as TextAnnotation;
+                return coords.x >= textAnn.x && coords.x <= textAnn.x + (textAnn.width || 100) &&
+                    coords.y >= textAnn.y && coords.y <= textAnn.y + (textAnn.height || 30);
+            }
+            return false;
         });
 
-        // Render current drawing path
-        if (isDrawing && currentPath.length > 0 && (activeTool === ToolType.PEN || activeTool === ToolType.HIGHLIGHT)) {
-            ctx.beginPath();
-            ctx.moveTo(currentPath[0].x, currentPath[0].y);
-            currentPath.forEach(p => ctx.lineTo(p.x, p.y));
-
-            ctx.strokeStyle = activeTool === ToolType.HIGHLIGHT ? '#FFFF00' : activeColor; // Red for pen, Yellow for highlight
-            ctx.lineWidth = activeTool === ToolType.HIGHLIGHT ? 20 : 2;
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            ctx.globalAlpha = activeTool === ToolType.HIGHLIGHT ? 0.4 : 1.0;
-            ctx.stroke();
-            ctx.globalAlpha = 1.0;
+        if (hitAnnotation) {
+            onAnnotationRemove(hitAnnotation.id);
         }
+    };
 
-        // Render text selection box
-        if (isDraggingText && textStartPos && textCurrentPos) {
-            const x = Math.min(textStartPos.x, textCurrentPos.x);
-            const y = Math.min(textStartPos.y, textCurrentPos.y);
-            const w = Math.abs(textCurrentPos.x - textStartPos.x);
-            const h = Math.abs(textCurrentPos.y - textStartPos.y);
-
-            ctx.strokeStyle = '#4F46E5';
-            ctx.lineWidth = 1;
-            ctx.setLineDash([5, 5]);
-            ctx.strokeRect(x, y, w, h);
-            ctx.setLineDash([]);
-
-            ctx.fillStyle = 'rgba(79, 70, 229, 0.1)';
-            ctx.fillRect(x, y, w, h);
-        }
-
-        ctx.restore();
-    }, [annotations, scale, pageNumber, isDrawing, currentPath, activeTool, isDraggingText, textStartPos, textCurrentPos, activeColor]);
-
-    // Mouse Handlers
+    // Mouse handlers
     const handleMouseDown = (e: React.MouseEvent) => {
-        if (activeTool === ToolType.MOVE) return;
-
         const coords = getCoords(e);
+
+        if (activeTool === ToolType.MOVE) {
+            const hitAnnotation = [...annotations].reverse().find(ann => {
+                if (ann.page !== pageNumber || ann.type !== 'text') return false;
+                const textAnn = ann as TextAnnotation;
+                return coords.x >= textAnn.x && coords.x <= textAnn.x + (textAnn.width || 100) &&
+                    coords.y >= textAnn.y && coords.y <= textAnn.y + (textAnn.height || 30);
+            });
+
+            if (hitAnnotation) {
+                setIsMoving(true);
+                setMovingAnnotationId(hitAnnotation.id);
+                setMoveStartPos(coords);
+            }
+            return;
+        }
 
         if (activeTool === ToolType.PEN || activeTool === ToolType.HIGHLIGHT) {
             setIsDrawing(true);
             setCurrentPath([coords]);
-        } else if (activeTool === ToolType.TEXT) {
+        } else if (activeTool === ToolType.TEXT || activeTool === ToolType.STICKY) {
             setIsDraggingText(true);
             setTextStartPos(coords);
             setTextCurrentPos(coords);
         } else if (activeTool === ToolType.ERASER) {
-            // Eraser logic: find intersected annotation and remove
-            // Simple bounding box check for now
-            const hitRadius = 10 / scale;
-            const hitAnnotation = annotations.find(ann => {
-                if (ann.page !== pageNumber) return false;
-                if (ann.type === 'path' || ann.type === 'highlight') {
-                    const pathAnn = ann as PathAnnotation;
-                    return pathAnn.points.some(p =>
-                        Math.abs(p.x - coords.x) < hitRadius && Math.abs(p.y - coords.y) < hitRadius
-                    );
-                } else if (ann.type === 'text') {
-                    const textAnn = ann as TextAnnotation;
-                    return coords.x >= textAnn.x && coords.x <= textAnn.x + (textAnn.width || 100) &&
-                        coords.y >= textAnn.y && coords.y <= textAnn.y + (textAnn.height || 20);
-                }
-                return false;
-            });
-
-            if (hitAnnotation) {
-                onAnnotationRemove(hitAnnotation.id);
-            }
+            eraseAtPosition(coords); // Brush eraser on mousedown
         }
     };
 
     const handleMouseMove = (e: React.MouseEvent) => {
-        if (activeTool === ToolType.MOVE) return;
         const coords = getCoords(e);
+
+        if (isMoving && moveStartPos && movingAnnotationId) {
+            if (canvasRef.current) {
+                canvasRef.current.style.cursor = 'grabbing';
+            }
+            return;
+        }
 
         if (isDrawing) {
             setCurrentPath(prev => [...prev, coords]);
-        } else if (isDraggingText) {
+        } else if (isDraggingText && textStartPos) {
             setTextCurrentPos(coords);
         } else if (activeTool === ToolType.ERASER && e.buttons === 1) {
-            // Drag eraser
-            handleMouseDown(e);
+            eraseAtPosition(coords); // Continue erasing while dragging
         }
     };
 
-    const handleMouseUp = () => {
+    const handleMouseUp = (e: React.MouseEvent) => {
+        const coords = getCoords(e);
+
+        if (isMoving && moveStartPos && movingAnnotationId) {
+            const dx = coords.x - moveStartPos.x;
+            const dy = coords.y - moveStartPos.y;
+
+            const ann = annotations.find(a => a.id === movingAnnotationId);
+            if (ann && ann.type === 'text') {
+                const textAnn = ann as TextAnnotation;
+                const updatedAnn: TextAnnotation = {
+                    ...textAnn,
+                    x: textAnn.x + dx,
+                    y: textAnn.y + dy
+                };
+                onAnnotationRemove(movingAnnotationId);
+                onAnnotationAdd(updatedAnn);
+            }
+
+            setIsMoving(false);
+            setMovingAnnotationId(null);
+            setMoveStartPos(null);
+            if (canvasRef.current) {
+                canvasRef.current.style.cursor = activeTool === ToolType.MOVE ? 'grab' : 'crosshair';
+            }
+            return;
+        }
+
         if (isDrawing) {
             setIsDrawing(false);
             if (currentPath.length > 1) {
@@ -238,39 +366,79 @@ export const AnnotationLayer: React.FC<AnnotationLayerProps> = ({
             const width = Math.abs(textCurrentPos.x - textStartPos.x);
             const height = Math.abs(textCurrentPos.y - textStartPos.y);
 
-            if (width > 10 && height > 10) {
+            if (width > 20 && height > 20) {
+                const editorX = Math.min(textStartPos.x, textCurrentPos.x);
+                const editorY = Math.min(textStartPos.y, textCurrentPos.y);
                 setActiveTextEditor({
-                    x: Math.min(textStartPos.x, textCurrentPos.x),
-                    y: Math.min(textStartPos.y, textCurrentPos.y),
+                    x: editorX,
+                    y: editorY,
                     width,
                     height
                 });
+                setEditingText("");
             }
             setTextStartPos(null);
             setTextCurrentPos(null);
         }
     };
 
-    const handleTextSubmit = (text: string) => {
-        if (activeTextEditor && text.trim()) {
+    // Double-click to edit existing text
+    const handleDoubleClick = (e: React.MouseEvent) => {
+        const coords = getCoords(e);
+
+        const hitAnnotation = [...annotations].reverse().find(ann => {
+            if (ann.page !== pageNumber || ann.type !== 'text') return false;
+            const textAnn = ann as TextAnnotation;
+            return coords.x >= textAnn.x && coords.x <= textAnn.x + (textAnn.width || 100) &&
+                coords.y >= textAnn.y && coords.y <= textAnn.y + (textAnn.height || 30);
+        });
+
+        if (hitAnnotation) {
+            const textAnn = hitAnnotation as TextAnnotation;
+            onAnnotationRemove(textAnn.id);
+            setActiveTextEditor({
+                x: textAnn.x,
+                y: textAnn.y,
+                width: textAnn.width || 200,
+                height: textAnn.height || 50,
+                annotationId: textAnn.id
+            });
+            setEditingText(textAnn.text);
+        }
+    };
+
+    const handleTextBlur = () => {
+        if (activeTextEditor && editingText.trim()) {
             const newAnnotation: TextAnnotation = {
-                id: Date.now().toString(),
+                id: activeTextEditor.annotationId || Date.now().toString(),
                 type: 'text',
                 page: pageNumber,
                 userId,
+                text: editingText,
                 x: activeTextEditor.x,
                 y: activeTextEditor.y,
+                fontSize: activeTool === ToolType.STICKY ? 16 : 20,
+                fontFamily: activeTool === ToolType.STICKY ? 'Arial' : 'Dancing Script',
+                color: activeTool === ToolType.STICKY ? '#000000' : activeColor,
                 width: activeTextEditor.width,
-                height: activeTextEditor.height,
-                text,
-                fontSize: 24, // Larger default for handwriting
-                color: activeColor,
-                fontFamily: 'Dancing Script'
+                height: activeTextEditor.height
             };
             onAnnotationAdd(newAnnotation);
         }
         setActiveTextEditor(null);
+        setEditingText("");
     };
+
+    // Update cursor based on tool
+    useEffect(() => {
+        if (canvasRef.current) {
+            if (activeTool === ToolType.MOVE) {
+                canvasRef.current.style.cursor = isMoving ? 'grabbing' : 'grab';
+            } else {
+                canvasRef.current.style.cursor = 'crosshair';
+            }
+        }
+    }, [activeTool, isMoving]);
 
     return (
         <div
@@ -280,44 +448,48 @@ export const AnnotationLayer: React.FC<AnnotationLayerProps> = ({
         >
             <canvas
                 ref={canvasRef}
-                className={`w-full h-full ${activeTool !== ToolType.MOVE ? 'pointer-events-auto cursor-crosshair' : ''}`}
-                width={containerRef.current?.clientWidth || 800}
-                height={containerRef.current?.clientHeight || 1100}
+                className="w-full h-full pointer-events-auto border-2 border-red-500/50"
                 onMouseDown={handleMouseDown}
                 onMouseMove={handleMouseMove}
                 onMouseUp={handleMouseUp}
                 onMouseLeave={handleMouseUp}
+                onDoubleClick={handleDoubleClick}
             />
 
+            {/* Text Editor Overlay */}
             {activeTextEditor && (
                 <div
-                    className="absolute pointer-events-auto"
+                    className={`absolute pointer-events-auto ${activeTool === ToolType.STICKY ? 'bg-yellow-100 shadow-xl' : ''}`}
                     style={{
-                        left: activeTextEditor.x * scale,
-                        top: activeTextEditor.y * scale,
-                        width: activeTextEditor.width * scale,
-                        height: activeTextEditor.height * scale,
+                        left: `${activeTextEditor.x * scale}px`,
+                        top: `${activeTextEditor.y * scale}px`,
+                        width: `${activeTextEditor.width * scale}px`,
+                        height: `${activeTextEditor.height * scale}px`,
                     }}
                 >
                     <textarea
                         autoFocus
-                        className="w-full h-full bg-transparent border border-blue-500 p-1 resize-none outline-none"
-                        style={{
-                            fontFamily: '"Dancing Script", cursive',
-                            fontSize: `${24 * scale}px`,
-                            lineHeight: 1.2,
-                            color: activeColor
-                        }}
-                        onBlur={(e) => handleTextSubmit(e.target.value)}
+                        value={editingText}
+                        onChange={(e) => setEditingText(e.target.value)}
+                        onBlur={handleTextBlur}
                         onKeyDown={(e) => {
-                            if (e.key === 'Enter' && !e.shiftKey) {
-                                e.preventDefault();
-                                handleTextSubmit(e.currentTarget.value);
-                            }
                             if (e.key === 'Escape') {
                                 setActiveTextEditor(null);
+                                setEditingText("");
+                            } else if (e.key === 'Enter' && e.ctrlKey) {
+                                handleTextBlur();
                             }
                         }}
+                        className={`w-full h-full p-2 border-2 rounded resize-none outline-none shadow-lg ${activeTool === ToolType.STICKY
+                            ? 'bg-yellow-100 border-yellow-400'
+                            : 'bg-transparent border-primary'
+                            }`}
+                        style={{
+                            fontFamily: activeTool === ToolType.STICKY ? 'Arial, sans-serif' : '"Dancing Script", cursive',
+                            fontSize: activeTool === ToolType.STICKY ? `${16 * scale}px` : `${20 * scale}px`,
+                            color: activeTool === ToolType.STICKY ? '#000000' : activeColor
+                        }}
+                        placeholder={activeTool === ToolType.STICKY ? "Sticky note..." : "Type text here... (Ctrl+Enter to save)"}
                     />
                 </div>
             )}

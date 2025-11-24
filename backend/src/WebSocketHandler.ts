@@ -126,6 +126,7 @@ export class WebSocketHandler {
           path: message.path,
           color: message.color,
           size: message.size,
+          opacity: message.opacity || 1,
           userId: userId,
           ts: Date.now(),
         };
@@ -143,9 +144,12 @@ export class WebSocketHandler {
           page: message.page,
           x: message.x,
           y: message.y,
+          width: message.width,
+          height: message.height,
           text: message.text,
           color: message.color,
           fontSize: message.fontSize,
+          fontFamily: message.fontFamily,
           userId: userId,
           ts: Date.now(),
         };
