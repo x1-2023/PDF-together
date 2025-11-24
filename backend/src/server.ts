@@ -262,9 +262,12 @@ app.get('/pdf/:id', (req, res) => {
   }
 
   // Add CORS headers for PDF files
-  res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
+  const origin = req.headers.origin || '*';
+  console.log(`[PDF CORS] Setting headers for origin: ${origin}`);
+  res.setHeader('Access-Control-Allow-Origin', origin);
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Content-Type', 'application/pdf');
+  console.log(`[PDF CORS] Headers set, sending file: ${filePath}`);
   res.sendFile(path.resolve(filePath));
 });
 

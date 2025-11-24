@@ -1,0 +1,99 @@
+.cat-loader-container {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--background-light);
+    /* Use theme variable */
+}
+
+/* Dark mode support */
+:global(.dark) .cat-loader-container {
+    background-color: var(--background-dark);
+}
+
+.cat-loader-wrapper {
+    width: fit-content;
+    height: fit-content;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.cat-container {
+    width: 100%;
+    height: fit-content;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+.catbody {
+    width: 80px;
+}
+
+.tail {
+    position: absolute;
+    width: 17px;
+    top: 50%;
+    animation: tail 0.5s ease-in infinite alternate-reverse;
+    transform-origin: top;
+}
+
+@keyframes tail {
+    0% {
+        transform: rotateZ(60deg);
+    }
+
+    50% {
+        transform: rotateZ(0deg);
+    }
+
+    100% {
+        transform: rotateZ(-20deg);
+    }
+}
+
+.wall {
+    width: 300px;
+}
+
+.cat-text {
+    display: flex;
+    flex-direction: column;
+    width: 50px;
+    position: absolute;
+    margin: 0px 0px 100px 120px;
+}
+
+.zzz {
+    color: var(--text-main);
+    font-weight: 700;
+    font-size: 15px;
+    animation: zzz 2s linear infinite;
+}
+
+.bigzzz {
+    color: var(--text-main);
+    font-weight: 700;
+    font-size: 25px;
+    margin-left: 10px;
+    animation: zzz 2.3s linear infinite;
+}
+
+@keyframes zzz {
+    0% {
+        color: transparent;
+    }
+
+    50% {
+        color: var(--text-main);
+    }
+
+    100% {
+        color: transparent;
+    }
+}
