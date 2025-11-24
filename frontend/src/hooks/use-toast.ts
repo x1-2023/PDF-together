@@ -2,7 +2,7 @@ import { toast as sonnerToast } from "sonner";
 import useSound from "use-sound";
 
 // Short pop sound
-const POP_SOUND = "https://assets.mixkit.co/active_storage/sfx/2578/2578-preview.mp3";
+const POP_SOUND = "/assets/sfx/pop.mp3";
 
 export const useToast = () => {
     const [play] = useSound(POP_SOUND, { volume: 0.25 });
