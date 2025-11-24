@@ -8,6 +8,12 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 5173,
       host: '0.0.0.0',
+      allowedHosts: ['pdf.0xit.me', '.0xit.me', 'localhost'],
+    },
+    preview: {
+      port: 8080,
+      host: '0.0.0.0',
+      allowedHosts: ['pdf.0xit.me', '.0xit.me', 'localhost'],
     },
     plugins: [react()],
     define: {
