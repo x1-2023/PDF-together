@@ -261,6 +261,9 @@ app.get('/pdf/:id', (req, res) => {
     return res.status(404).json({ error: 'PDF not found' });
   }
 
+  // Add CORS headers for PDF files
+  res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Content-Type', 'application/pdf');
   res.sendFile(path.resolve(filePath));
 });
