@@ -1,9 +1,12 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Document, Page, pdfjs } from 'react-pdf';
+import * as ReactWindow from 'react-window';
+import AutoSizer from 'react-virtualized-auto-sizer';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ToolType, ChatMessage, User, Annotation } from '../types';
 import { AnnotationLayer } from '../components/reader/AnnotationLayer';
+import CatLoader from '../components/ui/CatLoader';
 import { useToast } from '../hooks/use-toast';
 import { Toaster } from '../components/ui/toaster';
 import { aiService } from '../services/ai';
@@ -187,10 +190,10 @@ const Reader: React.FC = () => {
 
   const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
     setNumPages(numPages);
-    // Add a small delay to allow pages to start rendering before hiding the loader
+    // Keep loader for a moment for smoothness
     setTimeout(() => {
       setIsLoading(false);
-    }, 1500);
+    }, 500);
   };
 
   const handleSendMessage = async () => {
@@ -417,6 +420,20 @@ const Reader: React.FC = () => {
   return (
     <div className="flex h-screen w-full bg-background-light text-text-main overflow-hidden font-body select-none">
       <Toaster />
+
+      {/* Loading Overlay */}
+      <AnimatePresence>
+        {isLoading && (
+          <motion.div
+            initial={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.5 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-background-light dark:bg-background-dark"
+          >
+            <CatLoader />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Left Sidebar (Thumbnails) */}
       <motion.aside
