@@ -62,6 +62,8 @@ const Reader: React.FC = () => {
     }
   }, [id]);
 
+  const [isLoading, setIsLoading] = useState(true);
+
   // WebSocket Connection
   useEffect(() => {
     if (!id) return;
@@ -185,6 +187,10 @@ const Reader: React.FC = () => {
 
   const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
     setNumPages(numPages);
+    // Add a small delay to allow pages to start rendering before hiding the loader
+    setTimeout(() => {
+      setIsLoading(false);
+    }, 1500);
   };
 
   const handleSendMessage = async () => {

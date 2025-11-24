@@ -34,6 +34,13 @@ export const api = {
         return await res.json();
     },
 
+    deleteSession: async (id: string): Promise<void> => {
+        const res = await fetch(`${API_URL}/api/pdfs/${id}`, {
+            method: 'DELETE',
+        });
+        if (!res.ok) throw new Error('Failed to delete session');
+    },
+
     // Helper to get full URL for assets
     getAssetUrl: (path: string) => {
         if (path.startsWith('http')) return path;

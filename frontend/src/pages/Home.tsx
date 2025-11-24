@@ -23,6 +23,22 @@ const StatusBadge: React.FC<{ status: SessionStatus }> = ({ status }) => {
   );
 };
 
+// Random cover images for fallback
+const RANDOM_COVERS = [
+  "https://images.unsplash.com/photo-1497633762265-9d179a990aa6?w=800&q=80",
+  "https://images.unsplash.com/photo-1532012197267-da84d127e765?w=800&q=80",
+  "https://images.unsplash.com/photo-1507842217121-9e9f147d7121?w=800&q=80",
+  "https://images.unsplash.com/photo-1457369804613-52c61a468e7d?w=800&q=80",
+  "https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?w=800&q=80",
+  "https://images.unsplash.com/photo-1512820790803-83ca734da794?w=800&q=80",
+];
+
+const getRandomCover = (id: string) => {
+  // Use id to deterministically select a cover so it doesn't change on re-render
+  const index = id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % RANDOM_COVERS.length;
+  return RANDOM_COVERS[index];
+};
+
 const Home: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -35,6 +51,10 @@ const Home: React.FC = () => {
   const [newSessionTitle, setNewSessionTitle] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
 
   // Fetch sessions on mount
   useEffect(() => {
@@ -68,18 +88,60 @@ const Home: React.FC = () => {
 
     try {
       setIsUploading(true);
+      setUploadProgress(0);
+
+      // Simulate progress
+      const interval = setInterval(() => {
+        setUploadProgress(prev => {
+          if (prev >= 90) {
+            clearInterval(interval);
+            return 90;
+          }
+          return prev + 10;
+        });
+      }, 200);
+
       const newPdf = await api.uploadSession(selectedFile, { title: newSessionTitle });
 
-      toast.success("Đã tạo phiên mới thành công!");
-      setSessions([newPdf, ...sessions]);
-      setIsModalOpen(false);
-      setNewSessionTitle('');
-      setSelectedFile(null);
+      clearInterval(interval);
+      setUploadProgress(100);
+
+      // Short delay to show 100%
+      setTimeout(() => {
+        toast.success("Đã tạo phiên mới thành công!");
+        setSessions([newPdf, ...sessions]);
+        setIsModalOpen(false);
+        setNewSessionTitle('');
+        setSelectedFile(null);
+        setUploadProgress(0);
+      }, 500);
+
     } catch (error) {
       console.error(error);
       toast.error("Lỗi khi upload file.");
+      setUploadProgress(0);
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const handleDeleteSession = (id: string) => {
+    setSessionToDelete(id);
+    setDeleteModalOpen(true);
+  };
+
+  const confirmDeleteSession = async () => {
+    if (!sessionToDelete) return;
+
+    try {
+      await api.deleteSession(sessionToDelete);
+      setSessions(prev => prev.filter(s => s.id !== sessionToDelete));
+      toast.success("Đã xóa phiên thành công");
+      setDeleteModalOpen(false);
+      setSessionToDelete(null);
+    } catch (error) {
+      console.error(error);
+      toast.error("Lỗi khi xóa phiên");
     }
   };
 
@@ -200,8 +262,9 @@ const Home: React.FC = () => {
                   {/* Placeholder Cover if no real cover */}
                   <div
                     className="w-full h-full bg-cover bg-center transition-transform duration-700 group-hover:scale-110 flex items-center justify-center bg-gray-100 dark:bg-gray-800 text-gray-300"
+                    style={{ backgroundImage: session.cover ? `url("${session.cover}")` : `url("${getRandomCover(session.id)}")` }}
                   >
-                    <span className="material-symbols-outlined text-6xl">picture_as_pdf</span>
+                    {!session.cover && !getRandomCover(session.id) && <span className="material-symbols-outlined text-6xl">picture_as_pdf</span>}
                   </div>
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-60 group-hover:opacity-80 transition-opacity" />
 
@@ -211,6 +274,18 @@ const Home: React.FC = () => {
                       <span className="material-symbols-outlined text-3xl">arrow_forward</span>
                     </div>
                   </div>
+
+                  {/* Delete Button */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteSession(session.id);
+                    }}
+                    className="absolute top-3 right-3 p-2 rounded-full bg-black/40 hover:bg-red-500 text-white opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-2 group-hover:translate-y-0 z-10"
+                    title="Xóa phiên"
+                  >
+                    <span className="material-symbols-outlined text-sm">delete</span>
+                  </button>
 
                   <div className="absolute bottom-3 left-3 right-3 flex justify-between items-end">
                     <div className="flex items-center gap-1 text-white/90 text-xs font-medium bg-black/30 backdrop-blur-sm px-2 py-1 rounded-full border border-white/10">
@@ -288,6 +363,22 @@ const Home: React.FC = () => {
                 </>
               )}
             </div>
+
+            {/* Progress Bar */}
+            {isUploading && (
+              <div className="mt-4">
+                <div className="flex justify-between text-xs mb-1">
+                  <span className="font-bold text-primary">Đang tải lên...</span>
+                  <span className="text-text-muted">{uploadProgress}%</span>
+                </div>
+                <div className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-primary transition-all duration-200 ease-out"
+                    style={{ width: `${uploadProgress}%` }}
+                  ></div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Details Grid */}
@@ -317,8 +408,43 @@ const Home: React.FC = () => {
               disabled={!newSessionTitle || !selectedFile || isUploading}
               className="flex-[2] py-3.5 rounded-xl font-bold bg-text-main dark:bg-white text-white dark:text-text-main shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100 transition-all duration-300 flex items-center justify-center gap-2"
             >
-              {isUploading && <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>}
-              {isUploading ? 'Đang tải lên...' : 'Bắt đầu ngay'}
+              {isUploading ? 'Đang xử lý...' : 'Bắt đầu ngay'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        isOpen={deleteModalOpen}
+        onClose={() => setDeleteModalOpen(false)}
+        title="Xóa phiên học"
+      >
+        <div className="space-y-6">
+          <div className="flex items-center gap-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900 rounded-2xl">
+            <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/50 flex items-center justify-center shrink-0">
+              <span className="material-symbols-outlined text-red-600 dark:text-red-400 text-2xl">warning</span>
+            </div>
+            <div>
+              <h4 className="font-bold text-red-900 dark:text-red-200">Hành động này không thể hoàn tác</h4>
+              <p className="text-sm text-red-700 dark:text-red-300 mt-1">
+                Bạn có chắc chắn muốn xóa phiên học này? Tất cả dữ liệu và ghi chú sẽ bị mất vĩnh viễn.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex gap-4 pt-2">
+            <button
+              onClick={() => setDeleteModalOpen(false)}
+              className="flex-1 py-3.5 rounded-xl font-bold text-text-muted hover:text-text-main hover:bg-surface-light dark:hover:bg-white/5 transition-colors"
+            >
+              Hủy bỏ
+            </button>
+            <button
+              onClick={confirmDeleteSession}
+              className="flex-[2] py-3.5 rounded-xl font-bold bg-red-500 hover:bg-red-600 text-white shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all duration-300"
+            >
+              Xóa vĩnh viễn
             </button>
           </div>
         </div>

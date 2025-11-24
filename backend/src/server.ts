@@ -171,6 +171,18 @@ app.get('/api/pdfs', (req, res) => {
   }
 });
 
+// Random cover images for new sessions
+const COVER_IMAGES = [
+  "https://images.unsplash.com/photo-1497633762265-9d179a990aa6?w=800&q=80", // Books
+  "https://images.unsplash.com/photo-1532012197267-da84d127e765?w=800&q=80", // Library
+  "https://images.unsplash.com/photo-1507842217121-9e9f147d7121?w=800&q=80", // Library 2
+  "https://images.unsplash.com/photo-1457369804613-52c61a468e7d?w=800&q=80", // Open book
+  "https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?w=800&q=80", // Reading
+  "https://images.unsplash.com/photo-1512820790803-83ca734da794?w=800&q=80", // Tablet reading
+];
+
+const getRandomCover = () => COVER_IMAGES[Math.floor(Math.random() * COVER_IMAGES.length)];
+
 app.post('/api/upload-pdf', upload.single('file'), (req, res) => {
   try {
     if (!req.file) {
@@ -189,6 +201,7 @@ app.post('/api/upload-pdf', upload.single('file'), (req, res) => {
       title: title || req.file.originalname.replace('.pdf', ''),
       author: author || 'Unknown Author',
       description: description || '',
+      cover_image: getRandomCover(), // Assign random cover
       uploaded_by: 'user' // TODO: Get actual user from token if available
     });
 
@@ -241,7 +254,10 @@ app.get('/pdf/:id', (req, res) => {
   const { id } = req.params;
   const filePath = path.join(UPLOADS_DIR, id);
 
+  console.log(`[PDF Request] ID: ${id}, Path: ${filePath}, Exists: ${fs.existsSync(filePath)}`);
+
   if (!fs.existsSync(filePath)) {
+    console.error(`[PDF Error] File not found: ${filePath}`);
     return res.status(404).json({ error: 'PDF not found' });
   }
 
