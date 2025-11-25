@@ -27,6 +27,7 @@ export const AnnotationLayer: React.FC<AnnotationLayerProps> = ({
         activeColor,
         brushSize,
         highlighterSize,
+        eraserSize,
         fontSize,
         textAlignment,
         stickyColor
@@ -235,7 +236,7 @@ export const AnnotationLayer: React.FC<AnnotationLayerProps> = ({
                 currentPath.forEach(p => ctx.lineTo(p.x, p.y));
 
                 ctx.strokeStyle = activeTool === ToolType.HIGHLIGHT ? activeColor : (activeTool === ToolType.ERASER ? '#000000' : activeColor);
-                ctx.lineWidth = activeTool === ToolType.HIGHLIGHT ? highlighterSize : (activeTool === ToolType.ERASER ? 20 : brushSize);
+                ctx.lineWidth = activeTool === ToolType.HIGHLIGHT ? highlighterSize : (activeTool === ToolType.ERASER ? eraserSize : brushSize);
                 ctx.lineCap = 'round';
                 ctx.lineJoin = 'round';
                 ctx.globalAlpha = activeTool === ToolType.HIGHLIGHT ? 0.4 : 1.0;
@@ -361,7 +362,7 @@ export const AnnotationLayer: React.FC<AnnotationLayerProps> = ({
                     userId,
                     points: currentPath,
                     color: activeTool === ToolType.HIGHLIGHT ? activeColor : (activeTool === ToolType.ERASER ? '#000000' : activeColor),
-                    width: activeTool === ToolType.HIGHLIGHT ? highlighterSize : (activeTool === ToolType.ERASER ? 20 : brushSize),
+                    width: activeTool === ToolType.HIGHLIGHT ? highlighterSize : (activeTool === ToolType.ERASER ? eraserSize : brushSize),
                     opacity: activeTool === ToolType.HIGHLIGHT ? 0.4 : 1.0
                 };
                 addAnnotation(newAnnotation);
@@ -561,8 +562,8 @@ export const AnnotationLayer: React.FC<AnnotationLayerProps> = ({
                             }
                         }}
                         className={`w-full h-full p-2 border-2 rounded resize-none outline-none shadow-lg ${activeTextEditor.isSticky
-                                ? 'border-gray-400'
-                                : 'bg-transparent border-primary'
+                            ? 'border-gray-400'
+                            : 'bg-transparent border-primary'
                             }`}
                         style={{
                             fontFamily: activeTextEditor.isSticky ? 'Arial, sans-serif' : '"Dancing Script", cursive',
