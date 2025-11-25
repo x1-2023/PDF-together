@@ -40,6 +40,8 @@ export const ToolSettingsPanel: React.FC<ToolSettingsPanelProps> = ({ onClose })
         setBrushSize,
         highlighterSize,
         setHighlighterSize,
+        eraserSize,
+        setEraserSize,
         fontSize,
         setFontSize,
         textAlignment,
@@ -48,7 +50,7 @@ export const ToolSettingsPanel: React.FC<ToolSettingsPanelProps> = ({ onClose })
         setStickyColor,
     } = useUIStore();
 
-    if (activeTool === ToolType.CURSOR || activeTool === ToolType.MOVE || activeTool === ToolType.ERASER || activeTool === ToolType.AI) {
+    if (activeTool === ToolType.CURSOR || activeTool === ToolType.MOVE || activeTool === ToolType.AI) {
         return null; // No settings for these tools
     }
 
@@ -126,6 +128,22 @@ export const ToolSettingsPanel: React.FC<ToolSettingsPanelProps> = ({ onClose })
                         ))}
                     </div>
                 </>
+            )}
+
+            {/* Eraser Settings */}
+            {activeTool === ToolType.ERASER && (
+                <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">Size:</span>
+                    <Slider
+                        value={[eraserSize]}
+                        onValueChange={(value) => setEraserSize(value[0])}
+                        min={10}
+                        max={100}
+                        step={5}
+                        className="w-32"
+                    />
+                    <span className="text-sm font-medium w-12">{eraserSize}px</span>
+                </div>
             )}
 
             {/* Text Settings */}

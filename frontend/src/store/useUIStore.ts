@@ -10,6 +10,7 @@ interface UIState {
     // Tool settings
     brushSize: number;
     highlighterSize: number;
+    eraserSize: number;
     fontSize: number;
     textAlignment: 'left' | 'center' | 'right';
     stickyColor: string;
@@ -25,6 +26,7 @@ interface UIState {
     // Tool settings actions
     setBrushSize: (size: number) => void;
     setHighlighterSize: (size: number) => void;
+    setEraserSize: (size: number) => void;
     setFontSize: (size: number) => void;
     setTextAlignment: (alignment: 'left' | 'center' | 'right') => void;
     setStickyColor: (color: string) => void;
@@ -40,6 +42,7 @@ export const useUIStore = create<UIState>((set) => ({
     // Tool settings defaults
     brushSize: 2,
     highlighterSize: 20,
+    eraserSize: 20,
     fontSize: 20,
     textAlignment: 'left',
     stickyColor: '#FEF3C7', // Yellow
@@ -55,6 +58,7 @@ export const useUIStore = create<UIState>((set) => ({
     // Tool settings actions
     setBrushSize: (size) => set({ brushSize: size }),
     setHighlighterSize: (size) => set({ highlighterSize: size }),
+    setEraserSize: (size) => set({ eraserSize: size }),
     setFontSize: (size) => set({ fontSize: size }),
     setTextAlignment: (alignment) => set({ textAlignment: alignment }),
     setStickyColor: (color) => set({ stickyColor: color }),
