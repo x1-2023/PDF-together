@@ -28,11 +28,18 @@ const Reader = () => {
   const [jumpToPage, setJumpToPage] = useState("");
 
   // WebSocket
-  const { sendAnnotation } = useWebSocket(id || 'default', 'user-1', 'Guest');
+  const { sendAnnotation, sendMessage, messages } = useWebSocket(id || 'default', 'user-' + Math.floor(Math.random() * 1000), 'Guest');
 
   // Zustand stores
   const { pdfUrl, setPdfUrl, numPages, currentPage, scale, zoomIn, zoomOut, setCurrentPage } = usePDFStore();
   const { activeTool, setActiveTool, activeTab, setActiveTab } = useUIStore();
+
+  const handleSendMessage = () => {
+    if (message.trim()) {
+      sendMessage(message);
+      setMessage("");
+    }
+  };
 
   // Load PDF from API and fetch session data
   useEffect(() => {
@@ -98,11 +105,6 @@ const Reader = () => {
     { id: 1, name: "Bạn", status: "online", color: "bg-primary" },
     { id: 2, name: "Minh", status: "online", color: "bg-secondary" },
     { id: 3, name: "Hương", status: "away", color: "bg-accent" },
-  ];
-
-  const mockMessages = [
-    { id: 1, user: "Minh", message: "Trang 5 này khó quá!", time: "14:23", color: "bg-secondary" },
-    { id: 2, user: "Bạn", message: "Để mình giải thích nhé", time: "14:24", color: "bg-primary" },
   ];
 
   return (
@@ -288,22 +290,27 @@ const Reader = () => {
 
                       <ScrollArea className="flex-1">
                         <div className="p-4 space-y-3">
-                          {mockMessages.map((msg) => (
+                          {messages.map((msg) => (
                             <div key={msg.id} className="space-y-1">
                               <div className="flex items-center gap-2">
                                 <Avatar className="w-6 h-6">
-                                  <AvatarFallback className={msg.color}>
-                                    {msg.user[0]}
+                                  <AvatarFallback className={msg.color || "bg-primary"}>
+                                    {msg.user ? msg.user[0] : "?"}
                                   </AvatarFallback>
                                 </Avatar>
-                                <span className="text-xs font-bold">{msg.user}</span>
-                                <span className="text-xs text-muted-foreground">{msg.time}</span>
+                                <span className="text-xs font-bold">{msg.user || "Unknown"}</span>
+                                <span className="text-xs text-muted-foreground">{msg.timestamp}</span>
                               </div>
                               <div className="ml-8 rounded-2xl bg-cream px-3 py-2 text-sm">
-                                {msg.message}
+                                {msg.text}
                               </div>
                             </div>
                           ))}
+                          {messages.length === 0 && (
+                            <div className="text-center text-muted-foreground text-xs py-4">
+                              Chưa có tin nhắn nào. Hãy bắt đầu trò chuyện!
+                            </div>
+                          )}
                         </div>
                       </ScrollArea>
 
@@ -312,10 +319,15 @@ const Reader = () => {
                           <Input
                             value={message}
                             onChange={(e) => setMessage(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
                             placeholder="Nhập tin nhắn..."
                             className="rounded-xl flex-1"
                           />
-                          <Button size="icon" className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-light to-primary">
+                          <Button
+                            size="icon"
+                            className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-light to-primary"
+                            onClick={handleSendMessage}
+                          >
                             <Send className="w-4 h-4" />
                           </Button>
                         </div>

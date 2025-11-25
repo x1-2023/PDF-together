@@ -1,13 +1,24 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { usePDFStore } from '@/store/usePDFStore';
 import { useUIStore } from '@/store/useUIStore';
 import { Annotation, PathAnnotation, TextAnnotation } from '@/types';
 
 const WS_URL = 'ws://localhost:3001';
 
+export interface ChatMessage {
+    id: string;
+    userId: string;
+    text: string;
+    timestamp: string;
+    isSystem?: boolean;
+    user?: string; // Optional username for display
+    color?: string; // Optional color for display
+}
+
 export const useWebSocket = (channelId: string, userId: string, username: string) => {
     const ws = useRef<WebSocket | null>(null);
     const { addAnnotation, removeAnnotation, updateAnnotation, setAnnotations } = usePDFStore();
+    const [messages, setMessages] = useState<ChatMessage[]>([]);
 
     const connect = useCallback(() => {
         if (ws.current?.readyState === WebSocket.OPEN) return;
@@ -42,20 +53,13 @@ export const useWebSocket = (channelId: string, userId: string, username: string
         switch (message.type) {
             case 'snapshot':
                 // Load initial state
-                // Assuming message.data.annotations exists and is compatible
-                // We might need to map backend types to frontend types if they differ
-                // For now, let's assume they are close enough or we just handle ops
                 break;
 
             case 'draw_broadcast':
-                // Convert backend DrawOp to frontend PathAnnotation
                 const drawOp = message.op;
                 const pathAnn: PathAnnotation = {
                     id: drawOp.id,
-                    type: 'path', // or highlight based on opacity/width? Backend doesn't distinguish?
-                    // Wait, backend has 'draw' type. Frontend has 'path' | 'highlight' | 'eraser'
-                    // We need to map this.
-                    // For now let's assume standard path
+                    type: 'path',
                     page: drawOp.page,
                     userId: drawOp.userId,
                     points: drawOp.path,
@@ -63,11 +67,7 @@ export const useWebSocket = (channelId: string, userId: string, username: string
                     width: drawOp.size,
                     opacity: drawOp.opacity
                 };
-                // Check if highlight based on opacity/width heuristic if needed, 
-                // or better, update backend to store type.
-                // For now, trust the incoming data.
                 if (drawOp.opacity < 1) pathAnn.type = 'highlight';
-
                 addAnnotation(pathAnn);
                 break;
 
@@ -87,10 +87,6 @@ export const useWebSocket = (channelId: string, userId: string, username: string
                     fontSize: textOp.fontSize,
                     fontFamily: textOp.fontFamily
                 };
-                // If it exists, update it, otherwise add it
-                // We can use updateAnnotation which usually handles both if we modify store
-                // But store has separate add/update.
-                // Let's check if it exists
                 const exists = usePDFStore.getState().annotations.some(a => a.id === textAnn.id);
                 if (exists) {
                     updateAnnotation(textAnn);
@@ -101,6 +97,10 @@ export const useWebSocket = (channelId: string, userId: string, username: string
 
             case 'delete_annotation_broadcast':
                 removeAnnotation(message.id);
+                break;
+
+            case 'chat':
+                setMessages(prev => [...prev, message.data]);
                 break;
         }
     };
@@ -145,6 +145,27 @@ export const useWebSocket = (channelId: string, userId: string, username: string
         }));
     };
 
+    const sendMessage = (text: string) => {
+        if (ws.current?.readyState !== WebSocket.OPEN) return;
+
+        const messageData: ChatMessage = {
+            id: Date.now().toString(),
+            userId,
+            text,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            user: username,
+            color: 'bg-primary' // Default color, could be randomized or from user profile
+        };
+
+        // Optimistic update
+        setMessages(prev => [...prev, messageData]);
+
+        ws.current.send(JSON.stringify({
+            type: 'chat',
+            data: messageData
+        }));
+    };
+
     useEffect(() => {
         connect();
         return () => {
@@ -152,5 +173,5 @@ export const useWebSocket = (channelId: string, userId: string, username: string
         };
     }, [connect]);
 
-    return { sendAnnotation, deleteAnnotation };
+    return { sendAnnotation, deleteAnnotation, sendMessage, messages };
 };
