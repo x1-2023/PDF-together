@@ -34,15 +34,16 @@ const Reader = () => {
       // Use /pdf prefix (proxied to backend)
       setPdfUrl(`/pdf/${id}`);
 
-      // Fetch session data to get PDF name
-      fetch(`/api/sessions/${id}`)
+      // Fetch PDF list to get PDF name
+      fetch(`/api/pdfs`)
         .then(res => res.json())
         .then(data => {
-          if (data.pdfName) {
-            setPdfName(data.pdfName);
+          const pdf = data.pdfs?.find((p: any) => p.url.includes(id));
+          if (pdf?.title) {
+            setPdfName(pdf.title);
           }
         })
-        .catch(err => console.error('Failed to fetch session data:', err));
+        .catch(err => console.error('Failed to fetch PDF data:', err));
     }
   }, [id, setPdfUrl]);
 
