@@ -42,6 +42,12 @@ export const AnnotationLayer: React.FC<AnnotationLayerProps> = ({
     const [movingAnnotationId, setMovingAnnotationId] = useState<string | null>(null);
     const [moveStartPos, setMoveStartPos] = useState<{ x: number; y: number } | null>(null);
 
+    // Selection box state (for CURSOR/MOVE tool)
+    const [isSelecting, setIsSelecting] = useState(false);
+    const [selectionStart, setSelectionStart] = useState<{ x: number; y: number } | null>(null);
+    const [selectionEnd, setSelectionEnd] = useState<{ x: number; y: number } | null>(null);
+    const [selectedAnnotationIds, setSelectedAnnotationIds] = useState<string[]>([]);
+
     // Text editor state
     const [activeTextEditor, setActiveTextEditor] = useState<{
         x: number;
@@ -257,7 +263,7 @@ export const AnnotationLayer: React.FC<AnnotationLayerProps> = ({
     const handleMouseDown = (e: React.MouseEvent) => {
         const coords = getCoords(e);
 
-        if (activeTool === ToolType.MOVE) {
+        if (activeTool === ToolType.MOVE || activeTool === ToolType.CURSOR) {
             const hitAnnotation = [...pageAnnotations].reverse().find(ann => {
                 if (ann.type !== 'text') return false;
                 const textAnn = ann as TextAnnotation;
@@ -266,9 +272,16 @@ export const AnnotationLayer: React.FC<AnnotationLayerProps> = ({
             });
 
             if (hitAnnotation) {
+                // Clicked on annotation - start moving
                 setIsMoving(true);
                 setMovingAnnotationId(hitAnnotation.id);
                 setMoveStartPos(coords);
+            } else {
+                // Clicked on empty space - start selection box
+                setIsSelecting(true);
+                setSelectionStart(coords);
+                setSelectionEnd(coords);
+                setSelectedAnnotationIds([]); // Clear previous selection
             }
             return;
         }
@@ -313,6 +326,12 @@ export const AnnotationLayer: React.FC<AnnotationLayerProps> = ({
     const handleMouseMove = (e: React.MouseEvent) => {
         const coords = getCoords(e);
 
+        if (isSelecting && selectionStart) {
+            // Update selection box end position
+            setSelectionEnd(coords);
+            return;
+        }
+
         if (isMoving && moveStartPos && movingAnnotationId) {
             if (canvasRef.current) {
                 canvasRef.current.style.cursor = 'grabbing';
@@ -327,6 +346,31 @@ export const AnnotationLayer: React.FC<AnnotationLayerProps> = ({
 
     const handleMouseUp = (e: React.MouseEvent) => {
         const coords = getCoords(e);
+
+        if (isSelecting && selectionStart && selectionEnd) {
+            // Finalize selection box
+            const minX = Math.min(selectionStart.x, selectionEnd.x);
+            const maxX = Math.max(selectionStart.x, selectionEnd.x);
+            const minY = Math.min(selectionStart.y, selectionEnd.y);
+            const maxY = Math.max(selectionStart.y, selectionEnd.y);
+
+            // Find all text/sticky annotations within selection box
+            const selectedIds = pageAnnotations
+                .filter(ann => {
+                    if (ann.type !== 'text') return false;
+                    const textAnn = ann as TextAnnotation;
+                    // Check if annotation is fully or partially within selection box
+                    return textAnn.x >= minX && textAnn.x <= maxX &&
+                        textAnn.y >= minY && textAnn.y <= maxY;
+                })
+                .map(ann => ann.id);
+
+            setSelectedAnnotationIds(selectedIds);
+            setIsSelecting(false);
+            setSelectionStart(null);
+            setSelectionEnd(null);
+            return;
+        }
 
         if (isMoving && moveStartPos && movingAnnotationId) {
             const dx = coords.x - moveStartPos.x;
@@ -518,6 +562,21 @@ export const AnnotationLayer: React.FC<AnnotationLayerProps> = ({
         }
     }, [activeTextEditor]);
 
+    // Delete key handler for selected annotations
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Delete' && selectedAnnotationIds.length > 0) {
+                // Remove all selected annotations
+                const { removeAnnotation } = usePDFStore.getState();
+                selectedAnnotationIds.forEach(id => removeAnnotation(id));
+                setSelectedAnnotationIds([]);
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [selectedAnnotationIds]);
+
     return (
         <div
             ref={containerRef}
@@ -575,7 +634,47 @@ export const AnnotationLayer: React.FC<AnnotationLayerProps> = ({
                         placeholder={activeTextEditor.isSticky ? "Sticky note..." : "Type text... (Ctrl+Enter to save)"}
                     />
                 </div>
-            )}
-        </div>
+                </div>
+    )
+}
+
+{/* Selection Box */ }
+{
+    isSelecting && selectionStart && selectionEnd && (
+        <div
+            className="absolute pointer-events-none border-2 border-blue-500 border-dashed bg-blue-500/10"
+            style={{
+                left: `${Math.min(selectionStart.x, selectionEnd.x) * scale}px`,
+                top: `${Math.min(selectionStart.y, selectionEnd.y) * scale}px`,
+                width: `${Math.abs(selectionEnd.x - selectionStart.x) * scale}px`,
+                height: `${Math.abs(selectionEnd.y - selectionStart.y) * scale}px`,
+                zIndex: 40,
+            }}
+        />
+    )
+}
+
+{/* Selected Items Highlight */ }
+{
+    selectedAnnotationIds.map(id => {
+        const ann = pageAnnotations.find(a => a.id === id);
+        if (!ann || ann.type !== 'text') return null;
+        const textAnn = ann as TextAnnotation;
+        return (
+            <div
+                key={`selected-${id}`}
+                className="absolute pointer-events-none border-2 border-blue-500 bg-blue-500/20"
+                style={{
+                    left: `${textAnn.x * scale}px`,
+                    top: `${textAnn.y * scale}px`,
+                    width: `${(textAnn.width || 100) * scale}px`,
+                    height: `${(textAnn.height || 30) * scale}px`,
+                    zIndex: 35,
+                }}
+            />
+        );
+    })
+}
+        </div >
     );
 };
