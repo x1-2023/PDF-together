@@ -273,15 +273,35 @@ export const AnnotationLayer: React.FC<AnnotationLayerProps> = ({
         if (activeTool === ToolType.PEN || activeTool === ToolType.HIGHLIGHT || activeTool === ToolType.ERASER) {
             setIsDrawing(true);
             setCurrentPath([coords]);
-        } else if (activeTool === ToolType.TEXT || activeTool === ToolType.STICKY) {
-            // Click to create text editor
+        } else if (activeTool === ToolType.TEXT) {
+            // TEXT tool: Click to create text editor
             setActiveTextEditor({
                 x: coords.x,
                 y: coords.y,
-                width: activeTool === ToolType.STICKY ? 200 : 200, // Fixed width for sticky, initial for text
-                height: activeTool === ToolType.STICKY ? 150 : 30, // Fixed height for sticky
+                width: 200,
+                height: 30,
             });
             setEditingText("");
+        } else if (activeTool === ToolType.STICKY) {
+            // STICKY tool: Click to create sticky note immediately
+            const newSticky: TextAnnotation = {
+                id: Date.now().toString(),
+                type: 'text',
+                page: pageNumber,
+                userId,
+                text: 'Double click to edit',
+                x: coords.x,
+                y: coords.y,
+                fontSize: 16,
+                fontFamily: 'Arial',
+                color: stickyColor,
+                width: 200,
+                height: 150
+            };
+            addAnnotation(newSticky);
+            if (onAnnotationCreate) {
+                onAnnotationCreate(newSticky);
+            }
         }
     };
 
@@ -520,8 +540,8 @@ export const AnnotationLayer: React.FC<AnnotationLayerProps> = ({
                             }
                         }}
                         className={`w-full h-full p-2 border-2 rounded resize-none outline-none shadow-lg ${activeTool === ToolType.STICKY
-                                ? 'border-gray-400'
-                                : 'bg-transparent border-primary'
+                            ? 'border-gray-400'
+                            : 'bg-transparent border-primary'
                             }`}
                         style={{
                             fontFamily: activeTool === ToolType.STICKY ? 'Arial, sans-serif' : '"Dancing Script", cursive',
