@@ -24,6 +24,7 @@ export interface ChatMessage {
 }
 
 export enum ToolType {
+    CURSOR = 'cursor',
     MOVE = 'move',
     PEN = 'pen',
     HIGHLIGHT = 'highlight',
@@ -39,7 +40,7 @@ export interface Page {
     fullUrl: string;
 }
 
-export type AnnotationType = 'path' | 'text' | 'highlight';
+export type AnnotationType = 'path' | 'text' | 'highlight' | 'eraser';
 
 export interface BaseAnnotation {
     id: string;
@@ -49,7 +50,7 @@ export interface BaseAnnotation {
 }
 
 export interface PathAnnotation extends BaseAnnotation {
-    type: 'path' | 'highlight';
+    type: 'path' | 'highlight' | 'eraser';
     points: { x: number; y: number }[];
     color: string;
     width: number;

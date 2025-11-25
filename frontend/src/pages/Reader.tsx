@@ -17,12 +17,17 @@ import { useUIStore } from "@/store/useUIStore";
 import { VirtualizedPDFCanvas } from "@/components/reader/VirtualizedPDFCanvas";
 import { VirtualizedSidebar } from "@/components/reader/VirtualizedSidebar";
 
+import { useWebSocket } from "@/hooks/useWebSocket";
+
 const Reader = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const [message, setMessage] = useState("");
   const [pdfName, setPdfName] = useState("PDF Document");
   const [jumpToPage, setJumpToPage] = useState("");
+
+  // WebSocket
+  const { sendAnnotation } = useWebSocket(id || 'default', 'user-1', 'Guest');
 
   // Zustand stores
   const { pdfUrl, setPdfUrl, numPages, currentPage, scale, zoomIn, zoomOut, setCurrentPage } = usePDFStore();
@@ -57,12 +62,12 @@ const Reader = () => {
   };
 
   const tools = [
-    { id: "cursor", icon: MousePointer, label: "Con trỏ" },
+    { id: "move", icon: MousePointer, label: "Di chuyển" },
     { id: "pen", icon: Pen, label: "Bút" },
-    { id: "highlighter", icon: Highlighter, label: "Đánh dấu" },
+    { id: "highlight", icon: Highlighter, label: "Đánh dấu" },
     { id: "eraser", icon: Eraser, label: "Tẩy" },
     { id: "text", icon: Type, label: "Văn bản" },
-    { id: "note", icon: StickyNote, label: "Ghi chú" },
+    { id: "sticky", icon: StickyNote, label: "Ghi chú" },
     { id: "ai", icon: Sparkles, label: "AI" },
   ];
 
@@ -131,15 +136,6 @@ const Reader = () => {
             </Button>
           </div>
 
-          {/* Undo/Redo */}
-          <div className="hidden lg:flex items-center gap-1">
-            <Button variant="ghost" size="icon" className="w-9 h-9 rounded-full">
-              <Undo2 className="w-4 h-4" />
-            </Button>
-            <Button variant="ghost" size="icon" className="w-9 h-9 rounded-full">
-              <Redo2 className="w-4 h-4" />
-            </Button>
-          </div>
         </div>
       </header>
 
@@ -155,29 +151,62 @@ const Reader = () => {
 
           {/* Main Content: PDF Canvas */}
           <ResizablePanel defaultSize={55} minSize={40}>
-            <VirtualizedPDFCanvas />
+            <VirtualizedPDFCanvas onAnnotationCreate={sendAnnotation} />
 
             {/* Floating Tool Dock */}
-            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 floating-dock px-3 py-2 flex items-center gap-1 z-30">
-              {tools.map((tool) => {
-                const Icon = tool.icon;
-                return (
-                  <button
-                    key={tool.id}
-                    onClick={() => setActiveTool(tool.id)}
-                    className={`
-                      w-11 h-11 rounded-full flex items-center justify-center transition-all
-                      ${activeTool === tool.id
-                        ? 'bg-gradient-to-br from-primary-light to-primary text-primary-foreground shadow-warm-md scale-110'
-                        : 'hover:bg-muted text-muted-foreground hover:text-foreground'
-                      }
-                    `}
-                    title={tool.label}
-                  >
-                    <Icon className="w-5 h-5" />
-                  </button>
-                );
-              })}
+            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 floating-dock px-3 py-2 flex flex-col items-center gap-2 z-30">
+              {/* Color Picker (Only for Pen, Highlight, Text) */}
+              {['pen', 'highlight', 'text'].includes(activeTool) && (
+                <div className="flex items-center gap-1 bg-background/90 backdrop-blur-sm p-1.5 rounded-full border border-border shadow-sm mb-1 animate-in fade-in slide-in-from-bottom-2">
+                  {['#000000', '#EF4444', '#22C55E', '#3B82F6', '#EAB308', '#A855F7'].map((color) => (
+                    <button
+                      key={color}
+                      onClick={() => useUIStore.getState().setActiveColor(color)}
+                      className={`w-6 h-6 rounded-full border border-border transition-transform hover:scale-110 ${useUIStore.getState().activeColor === color ? 'ring-2 ring-primary ring-offset-1' : ''}`}
+                      style={{ backgroundColor: color }}
+                    />
+                  ))}
+                </div>
+              )}
+
+              <div className="flex items-center gap-1 px-3 py-2 bg-card/90 backdrop-blur-md border border-border/50 shadow-warm-lg rounded-full">
+                {tools.map((tool) => {
+                  const Icon = tool.icon;
+                  return (
+                    <button
+                      key={tool.id}
+                      onClick={() => setActiveTool(tool.id)}
+                      className={`
+                        w-10 h-10 rounded-full flex items-center justify-center transition-all
+                        ${activeTool === tool.id
+                          ? 'bg-gradient-to-br from-primary-light to-primary text-primary-foreground shadow-warm-md scale-110'
+                          : 'hover:bg-muted text-muted-foreground hover:text-foreground'
+                        }
+                      `}
+                      title={tool.label}
+                    >
+                      <Icon className="w-5 h-5" />
+                    </button>
+                  );
+                })}
+
+                <div className="w-px h-6 bg-border mx-1" />
+
+                <button
+                  onClick={() => { /* Undo logic */ }}
+                  className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
+                  title="Hoàn tác"
+                >
+                  <Undo2 className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={() => { /* Redo logic */ }}
+                  className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
+                  title="Làm lại"
+                >
+                  <Redo2 className="w-5 h-5" />
+                </button>
+              </div>
             </div>
           </ResizablePanel>
 

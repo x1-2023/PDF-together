@@ -4,11 +4,14 @@ import { Virtuoso } from 'react-virtuoso';
 import { usePDFStore } from '@/store/usePDFStore';
 import { PDFPage } from './PDFPage';
 
+import { Annotation } from '@/types';
+
 interface VirtualizedPDFCanvasProps {
     userId?: string;
+    onAnnotationCreate?: (annotation: Annotation) => void;
 }
 
-export const VirtualizedPDFCanvas: React.FC<VirtualizedPDFCanvasProps> = ({ userId }) => {
+export const VirtualizedPDFCanvas: React.FC<VirtualizedPDFCanvasProps> = ({ userId, onAnnotationCreate }) => {
     const { pdfUrl, numPages, setNumPages, setCurrentPage, scale } = usePDFStore();
     const virtuosoRef = useRef<any>(null);
 
@@ -53,6 +56,7 @@ export const VirtualizedPDFCanvas: React.FC<VirtualizedPDFCanvasProps> = ({ user
                                         pageNumber={index + 1}
                                         scale={scale}
                                         userId={userId}
+                                        onAnnotationCreate={onAnnotationCreate}
                                     />
                                 </div>
                             )}

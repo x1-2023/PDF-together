@@ -5,6 +5,7 @@ interface UIState {
     rightSidebarOpen: boolean;
     activeTool: string;
     activeTab: string;
+    activeColor: string;
 
     toggleLeftSidebar: () => void;
     toggleRightSidebar: () => void;
@@ -12,6 +13,7 @@ interface UIState {
     setRightSidebarOpen: (open: boolean) => void;
     setActiveTool: (tool: string) => void;
     setActiveTab: (tab: string) => void;
+    setActiveColor: (color: string) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -19,6 +21,7 @@ export const useUIStore = create<UIState>((set) => ({
     rightSidebarOpen: true,
     activeTool: 'cursor',
     activeTab: 'notes',
+    activeColor: '#000000',
 
     toggleLeftSidebar: () => set((state) => ({ leftSidebarOpen: !state.leftSidebarOpen })),
     toggleRightSidebar: () => set((state) => ({ rightSidebarOpen: !state.rightSidebarOpen })),
@@ -26,4 +29,5 @@ export const useUIStore = create<UIState>((set) => ({
     setRightSidebarOpen: (open) => set({ rightSidebarOpen: open }),
     setActiveTool: (tool) => set({ activeTool: tool }),
     setActiveTab: (tab) => set({ activeTab: tab }),
+    setActiveColor: (color) => set({ activeColor: color }),
 }));
