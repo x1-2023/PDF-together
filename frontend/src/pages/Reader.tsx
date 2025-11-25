@@ -31,7 +31,7 @@ const Reader = () => {
   const { sendAnnotation, sendMessage, messages } = useWebSocket(id || 'default', 'user-' + Math.floor(Math.random() * 1000), 'Guest');
 
   // Zustand stores
-  const { pdfUrl, setPdfUrl, numPages, currentPage, scale, zoomIn, zoomOut, setCurrentPage } = usePDFStore();
+  const { pdfUrl, setPdfUrl, numPages, currentPage, scale, zoomIn, zoomOut, setCurrentPage, undo, redo, history, future } = usePDFStore();
   const { activeTool, setActiveTool, activeTab, setActiveTab } = useUIStore();
 
   const handleSendMessage = () => {
@@ -141,6 +141,30 @@ const Reader = () => {
               min={1}
               max={numPages}
             />
+          </div>
+
+          {/* Undo/Redo */}
+          <div className="hidden sm:flex items-center gap-1 bg-card rounded-full px-2 py-1 shadow-warm-sm mr-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="w-8 h-8 rounded-full"
+              onClick={undo}
+              disabled={history.length === 0}
+              title="Undo (Ctrl+Z)"
+            >
+              <Undo2 className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="w-8 h-8 rounded-full"
+              onClick={redo}
+              disabled={future.length === 0}
+              title="Redo (Ctrl+Y)"
+            >
+              <Redo2 className="w-4 h-4" />
+            </Button>
           </div>
 
           {/* Zoom Controls */}
