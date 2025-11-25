@@ -166,7 +166,7 @@ const Reader = () => {
       <div className="flex-1 overflow-hidden">
         <ResizablePanelGroup direction="horizontal" className="h-full">
           {/* Left Sidebar: Thumbnails */}
-          <ResizablePanel defaultSize={18} minSize={15} maxSize={25} className="hidden lg:block">
+          <ResizablePanel defaultSize={5} minSize={3} maxSize={10} className="hidden lg:block">
             <VirtualizedSidebar />
           </ResizablePanel>
 
