@@ -634,47 +634,41 @@ export const AnnotationLayer: React.FC<AnnotationLayerProps> = ({
                         placeholder={activeTextEditor.isSticky ? "Sticky note..." : "Type text... (Ctrl+Enter to save)"}
                     />
                 </div>
-                </div>
-    )
-}
+            )}
 
-{/* Selection Box */ }
-{
-    isSelecting && selectionStart && selectionEnd && (
-        <div
-            className="absolute pointer-events-none border-2 border-blue-500 border-dashed bg-blue-500/10"
-            style={{
-                left: `${Math.min(selectionStart.x, selectionEnd.x) * scale}px`,
-                top: `${Math.min(selectionStart.y, selectionEnd.y) * scale}px`,
-                width: `${Math.abs(selectionEnd.x - selectionStart.x) * scale}px`,
-                height: `${Math.abs(selectionEnd.y - selectionStart.y) * scale}px`,
-                zIndex: 40,
-            }}
-        />
-    )
-}
+            {/* Selection Box */}
+            {isSelecting && selectionStart && selectionEnd && (
+                <div
+                    className="absolute pointer-events-none border-2 border-blue-500 border-dashed bg-blue-500/10"
+                    style={{
+                        left: `${Math.min(selectionStart.x, selectionEnd.x) * scale}px`,
+                        top: `${Math.min(selectionStart.y, selectionEnd.y) * scale}px`,
+                        width: `${Math.abs(selectionEnd.x - selectionStart.x) * scale}px`,
+                        height: `${Math.abs(selectionEnd.y - selectionStart.y) * scale}px`,
+                        zIndex: 40,
+                    }}
+                />
+            )}
 
-{/* Selected Items Highlight */ }
-{
-    selectedAnnotationIds.map(id => {
-        const ann = pageAnnotations.find(a => a.id === id);
-        if (!ann || ann.type !== 'text') return null;
-        const textAnn = ann as TextAnnotation;
-        return (
-            <div
-                key={`selected-${id}`}
-                className="absolute pointer-events-none border-2 border-blue-500 bg-blue-500/20"
-                style={{
-                    left: `${textAnn.x * scale}px`,
-                    top: `${textAnn.y * scale}px`,
-                    width: `${(textAnn.width || 100) * scale}px`,
-                    height: `${(textAnn.height || 30) * scale}px`,
-                    zIndex: 35,
-                }}
-            />
-        );
-    })
-}
-        </div >
+            {/* Selected Items Highlight */}
+            {selectedAnnotationIds.map(id => {
+                const ann = pageAnnotations.find(a => a.id === id);
+                if (!ann || ann.type !== 'text') return null;
+                const textAnn = ann as TextAnnotation;
+                return (
+                    <div
+                        key={`selected-${id}`}
+                        className="absolute pointer-events-none border-2 border-blue-500 bg-blue-500/20"
+                        style={{
+                            left: `${textAnn.x * scale}px`,
+                            top: `${textAnn.y * scale}px`,
+                            width: `${(textAnn.width || 100) * scale}px`,
+                            height: `${(textAnn.height || 30) * scale}px`,
+                            zIndex: 35,
+                        }}
+                    />
+                );
+            })}
+        </div>
     );
 };
