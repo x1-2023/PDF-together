@@ -6,7 +6,7 @@ import {
   ArrowLeft, ZoomIn, ZoomOut, Undo2, Redo2,
   MousePointer, Pen, Highlighter, Eraser, Type,
   StickyNote, Sparkles, MessageSquare, Users,
-  Send
+  Send, Search
 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Input } from "@/components/ui/input";
@@ -21,18 +21,39 @@ const Reader = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const [message, setMessage] = useState("");
+  const [pdfName, setPdfName] = useState("PDF Document");
+  const [jumpToPage, setJumpToPage] = useState("");
 
   // Zustand stores
-  const { pdfUrl, setPdfUrl, numPages, currentPage, scale, zoomIn, zoomOut } = usePDFStore();
+  const { pdfUrl, setPdfUrl, numPages, currentPage, scale, zoomIn, zoomOut, setCurrentPage } = usePDFStore();
   const { activeTool, setActiveTool, activeTab, setActiveTab } = useUIStore();
 
-  // Load PDF from API
+  // Load PDF from API and fetch session data
   useEffect(() => {
     if (id) {
       // Use /pdf prefix (proxied to backend)
       setPdfUrl(`/pdf/${id}`);
+
+      // Fetch session data to get PDF name
+      fetch(`/api/sessions/${id}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.pdfName) {
+            setPdfName(data.pdfName);
+          }
+        })
+        .catch(err => console.error('Failed to fetch session data:', err));
     }
   }, [id, setPdfUrl]);
+
+  // Handle jump to page
+  const handleJumpToPage = () => {
+    const pageNum = parseInt(jumpToPage);
+    if (pageNum >= 1 && pageNum <= numPages) {
+      setCurrentPage(pageNum);
+      setJumpToPage("");
+    }
+  };
 
   const tools = [
     { id: "cursor", icon: MousePointer, label: "Con trỏ" },
@@ -69,23 +90,48 @@ const Reader = () => {
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <div>
-            <h2 className="font-heading font-bold text-sm">PDF Document</h2>
-            <p className="text-xs text-muted-foreground">{numPages} trang • 5 người</p>
+            <h2 className="font-heading font-bold text-sm truncate max-w-[200px]" title={pdfName}>{pdfName}</h2>
+            <p className="text-xs text-muted-foreground">
+              Page {currentPage} / {numPages} • 5 người
+            </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Jump to Page */}
+          <div className="hidden md:flex items-center gap-1">
+            <Input
+              type="number"
+              placeholder="Go to..."
+              value={jumpToPage}
+              onChange={(e) => setJumpToPage(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleJumpToPage()}
+              className="w-20 h-8 text-xs"
+              min={1}
+              max={numPages}
+            />
+          </div>
+
+          {/* Zoom Controls */}
           <div className="hidden sm:flex items-center gap-1 bg-card rounded-full px-2 py-1 shadow-warm-sm">
             <Button variant="ghost" size="icon" className="w-8 h-8 rounded-full" onClick={zoomOut}>
               <ZoomOut className="w-4 h-4" />
             </Button>
-            <span className="text-sm font-medium px-2">{Math.round(scale * 100)}%</span>
+            <span className="text-sm font-medium px-2 min-w-[45px] text-center">{Math.round(scale * 100)}%</span>
             <Button variant="ghost" size="icon" className="w-8 h-8 rounded-full" onClick={zoomIn}>
               <ZoomIn className="w-4 h-4" />
             </Button>
           </div>
 
+          {/* Action Buttons */}
           <div className="hidden sm:flex items-center gap-1">
+            <Button variant="ghost" size="icon" className="w-9 h-9 rounded-full" title="Search">
+              <Search className="w-4 h-4" />
+            </Button>
+          </div>
+
+          {/* Undo/Redo */}
+          <div className="hidden lg:flex items-center gap-1">
             <Button variant="ghost" size="icon" className="w-9 h-9 rounded-full">
               <Undo2 className="w-4 h-4" />
             </Button>
@@ -108,7 +154,7 @@ const Reader = () => {
 
           {/* Main Content: PDF Canvas */}
           <ResizablePanel defaultSize={55} minSize={40}>
-            <VirtualizedPDFCanvas file={pdfUrl} />
+            <VirtualizedPDFCanvas />
 
             {/* Floating Tool Dock */}
             <div className="fixed bottom-6 left-1/2 -translate-x-1/2 floating-dock px-3 py-2 flex items-center gap-1 z-30">

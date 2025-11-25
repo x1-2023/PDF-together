@@ -27,6 +27,6 @@ export default defineConfig({
     },
   },
   optimizeDeps: {
-    include: ['react-window', 'react-virtualized-auto-sizer'],
+    include: ['react-virtuoso'],
   },
 });

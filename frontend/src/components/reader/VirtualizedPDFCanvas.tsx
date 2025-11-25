@@ -1,77 +1,76 @@
 import React, { useRef } from 'react';
 import { Document } from 'react-pdf';
-import AutoSizer from 'react-virtualized-auto-sizer';
-import { VariableSizeList as List } from 'react-window';
+import { Virtuoso } from 'react-virtuoso';
 import { usePDFStore } from '@/store/usePDFStore';
-import { VirtualizedList } from './VirtualizedList';
 import { PDFPage } from './PDFPage';
-import '@/lib/pdf-setup'; // Import worker setup
 
 interface VirtualizedPDFCanvasProps {
-    file: string | File | null;
+    userId?: string;
 }
 
-export const VirtualizedPDFCanvas: React.FC<VirtualizedPDFCanvasProps> = ({ file }) => {
-    const { setNumPages, numPages, scale, setCurrentPage } = usePDFStore();
-    const listRef = useRef<List>(null);
+export const VirtualizedPDFCanvas: React.FC<VirtualizedPDFCanvasProps> = ({ userId }) => {
+    const { pdfUrl, numPages, setNumPages, setCurrentPage, scale } = usePDFStore();
+    const virtuosoRef = useRef<any>(null);
 
-    const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
+    const handleDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
         setNumPages(numPages);
+        console.log(`PDF loaded: ${numPages} pages`);
     };
 
-    // Estimate page height based on width (assuming A4 ratio approx 1.414)
-    // In a real app, we might want to get exact page sizes, but for now this is a good approximation
-    const getItemSize = (width: number) => {
-        const pageWidth = width * 0.9;
-        const pageHeight = pageWidth * 1.414;
-        return (pageHeight * scale) + 48; // +48 for padding
+    const handleDocumentLoadError = (error: Error) => {
+        console.error('Error loading PDF:', error);
     };
 
-    // Sync scroll to current page
-    const onItemsRendered = ({ visibleStartIndex }: { visibleStartIndex: number }) => {
-        setCurrentPage(visibleStartIndex + 1);
-    };
+    if (!pdfUrl) {
+        return (
+            <div className="flex items-center justify-center h-full">
+                <p className="text-muted-foreground">No PDF loaded</p>
+            </div>
+        );
+    }
 
     return (
-        <div className="h-full w-full bg-muted/20">
-            {file ? (
-                <Document
-                    file={file}
-                    onLoadSuccess={onDocumentLoadSuccess}
-                    loading={
+        <div className="h-full w-full bg-muted/30" style={{ position: 'relative' }}>
+            <Document
+                file={pdfUrl}
+                onLoadSuccess={handleDocumentLoadSuccess}
+                onLoadError={handleDocumentLoadError}
+                loading={
+                    <div className="flex items-center justify-center h-full">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+                    </div>
+                }
+            >
+                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
+                    {numPages > 0 ? (
+                        <Virtuoso
+                            ref={virtuosoRef}
+                            style={{ height: '100%', width: '100%' }}
+                            totalCount={numPages}
+                            itemContent={(index) => (
+                                <div className="flex justify-center py-4">
+                                    <PDFPage
+                                        pageNumber={index + 1}
+                                        scale={scale}
+                                        userId={userId}
+                                    />
+                                </div>
+                            )}
+                            rangeChanged={(range) => {
+                                if (range.startIndex >= 0) {
+                                    setCurrentPage(range.startIndex + 1);
+                                }
+                            }}
+                            overscan={5}
+                            increaseViewportBy={{ top: 1500, bottom: 1500 }}
+                        />
+                    ) : (
                         <div className="flex items-center justify-center h-full">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
                         </div>
-                    }
-                    error={
-                        <div className="flex items-center justify-center h-full text-red-500">
-                            Failed to load PDF
-                        </div>
-                    }
-                    className="h-full"
-                >
-                    <AutoSizer>
-                        {({ height, width }) => (
-                            <VirtualizedList
-                                ref={listRef}
-                                height={height}
-                                width={width}
-                                itemCount={numPages}
-                                itemSize={() => getItemSize(width)}
-                                itemData={{ width, scale }}
-                                overscanCount={2}
-                                onItemsRendered={onItemsRendered}
-                            >
-                                {PDFPage}
-                            </VirtualizedList>
-                        )}
-                    </AutoSizer>
-                </Document>
-            ) : (
-                <div className="flex items-center justify-center h-full text-muted-foreground">
-                    No PDF selected
+                    )}
                 </div>
-            )}
+            </Document>
         </div>
     );
 };
