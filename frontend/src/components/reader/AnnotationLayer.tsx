@@ -17,85 +17,112 @@ export const AnnotationLayer: React.FC<AnnotationLayerProps> = ({
     onAnnotationCreate
 }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    annotationId ?: string;
-} | null > (null);
-const [editingText, setEditingText] = useState("");
+    const containerRef = useRef<HTMLDivElement>(null);
 
-const [forceRender, setForceRender] = useState(0);
+    // Stores
+    const { annotations, addAnnotation, updateAnnotation } = usePDFStore();
+    const {
+        activeTool,
+        activeColor,
+        brushSize,
+        highlighterSize,
+        fontSize,
+        textAlignment,
+        stickyColor
+    } = useUIStore();
 
-// Helper to get coordinates
-const getCoords = (e: React.MouseEvent) => {
-    if (!canvasRef.current) return { x: 0, y: 0 };
-    const rect = canvasRef.current.getBoundingClientRect();
-    return {
-        x: (e.clientX - rect.left) / scale,
-        y: (e.clientY - rect.top) / scale
+    // Drawing state
+    const [isDrawing, setIsDrawing] = useState(false);
+    const [currentPath, setCurrentPath] = useState<{ x: number; y: number }[]>([]);
+
+    // Move tool state
+    const [isMoving, setIsMoving] = useState(false);
+    const [movingAnnotationId, setMovingAnnotationId] = useState<string | null>(null);
+    const [moveStartPos, setMoveStartPos] = useState<{ x: number; y: number } | null>(null);
+
+    // Text editor state
+    const [activeTextEditor, setActiveTextEditor] = useState<{
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+        annotationId?: string;
+    } | null>(null);
+    const [editingText, setEditingText] = useState("");
+
+    const [forceRender, setForceRender] = useState(0);
+
+    // Filter annotations for this page, excluding currently editing text
+    const pageAnnotations = annotations.filter(a =>
+        a.page === pageNumber &&
+        (activeTextEditor?.annotationId !== a.id)
+    );
+
+    // Helper to get coordinates
+    const getCoords = (e: React.MouseEvent) => {
+        if (!canvasRef.current) return { x: 0, y: 0 };
+        const rect = canvasRef.current.getBoundingClientRect();
+        return {
+            x: (e.clientX - rect.left) / scale,
+            y: (e.clientY - rect.top) / scale
+        };
     };
-};
 
-// Load Dancing Script font
-useEffect(() => {
-    if (document.fonts) {
-        document.fonts.load('20px "Dancing Script"').then(() => {
-            setForceRender(prev => prev + 1);
-        }).catch(err => {
-            console.error('Failed to load Dancing Script font:', err);
-        });
+    // Load Dancing Script font
+    useEffect(() => {
+        if (document.fonts) {
+            document.fonts.load('20px "Dancing Script"').then(() => {
+                setForceRender(prev => prev + 1);
+            }).catch(err => {
+                console.error('Failed to load Dancing Script font:', err);
+            });
 
-        // Also listen for ready promise
-        document.fonts.ready.then(() => {
-            setForceRender(prev => prev + 1);
-        });
-    }
-}, []);
-
-// We need a state to track canvas size changes to trigger re-render
-const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
-
-// Update canvas size with ResizeObserver
-useEffect(() => {
-    if (!containerRef.current || !canvasRef.current) return;
-
-    const updateSize = () => {
-        if (containerRef.current && canvasRef.current) {
-            const { clientWidth, clientHeight } = containerRef.current;
-            if (clientWidth > 0 && clientHeight > 0 && (canvasRef.current.width !== clientWidth || canvasRef.current.height !== clientHeight)) {
-                canvasRef.current.width = clientWidth;
-                canvasRef.current.height = clientHeight;
-                setCanvasSize({ width: clientWidth, height: clientHeight });
-            }
+            document.fonts.ready.then(() => {
+                setForceRender(prev => prev + 1);
+            });
         }
-    };
+    }, []);
 
-    const resizeObserver = new ResizeObserver(updateSize);
-    resizeObserver.observe(containerRef.current);
+    // Update canvas size
+    const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
 
-    updateSize();
+    useEffect(() => {
+        if (!containerRef.current || !canvasRef.current) return;
 
-    return () => {
-        resizeObserver.disconnect();
-    };
-}, [scale]);
+        const updateSize = () => {
+            if (containerRef.current && canvasRef.current) {
+                const { clientWidth, clientHeight } = containerRef.current;
+                if (clientWidth > 0 && clientHeight > 0) {
+                    canvasRef.current.width = clientWidth;
+                    canvasRef.current.height = clientHeight;
+                    setCanvasSize({ width: clientWidth, height: clientHeight });
+                }
+            }
+        };
 
-// Render annotations
-useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+        const resizeObserver = new ResizeObserver(updateSize);
+        resizeObserver.observe(containerRef.current);
+        updateSize();
 
-    const render = () => {
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
+        return () => {
+            resizeObserver.disconnect();
+        };
+    }, [scale]);
 
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.save();
-        ctx.scale(scale, scale);
+    // Render annotations
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
 
-        // Render existing annotations
-        if (Array.isArray(pageAnnotations)) {
+        const render = () => {
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.save();
+            ctx.scale(scale, scale);
+
+            // Render existing annotations
             pageAnnotations.forEach(ann => {
                 if (ann.type === 'path' || ann.type === 'highlight' || ann.type === 'eraser') {
                     const pathAnn = ann as PathAnnotation;
@@ -119,35 +146,38 @@ useEffect(() => {
 
                     ctx.restore();
                 } else if (ann.type === 'text') {
-                    // ... text rendering ...
                     const textAnn = ann as TextAnnotation;
                     const fontFamily = textAnn.fontFamily || 'Dancing Script';
-                    const fontSize = textAnn.fontSize || 20;
+                    const textFontSize = textAnn.fontSize || 20;
 
-                    ctx.font = `${fontSize}px "${fontFamily}", cursive`;
+                    ctx.font = `${textFontSize}px "${fontFamily}", cursive`;
+
                     if (fontFamily === 'Arial') {
-                        ctx.font = `${fontSize}px Arial, sans-serif`;
+                        // Sticky note rendering
+                        ctx.font = `${textFontSize}px Arial, sans-serif`;
 
-                        // Draw sticky note background
                         const padding = 10;
                         const width = textAnn.width || 200;
                         const height = textAnn.height || 100;
 
+                        // Get sticky color from annotation or use default
+                        const bgColor = textAnn.color === '#000000' ? stickyColor : textAnn.color;
+
                         ctx.save();
-                        ctx.fillStyle = '#FEF3C7'; // yellow-100
+                        ctx.fillStyle = bgColor;
                         ctx.shadowColor = 'rgba(0, 0, 0, 0.1)';
                         ctx.shadowBlur = 10;
                         ctx.shadowOffsetX = 0;
                         ctx.shadowOffsetY = 4;
                         ctx.fillRect(textAnn.x, textAnn.y, width, height);
 
-                        // Draw border
-                        ctx.strokeStyle = '#FBBF24'; // yellow-400
+                        // Border
+                        ctx.strokeStyle = bgColor === '#FEF3C7' ? '#FBBF24' : '#999';
                         ctx.lineWidth = 1;
                         ctx.strokeRect(textAnn.x, textAnn.y, width, height);
                         ctx.restore();
 
-                        // Adjust text position for padding
+                        // Text
                         ctx.fillStyle = '#000000';
                         ctx.textBaseline = 'top';
 
@@ -155,88 +185,174 @@ useEffect(() => {
                         const words = textAnn.text.split(' ');
                         let line = '';
                         let y = textAnn.y + padding;
-                        const lineHeight = fontSize * 1.2;
+                        const lineHeight = textFontSize * 1.2;
                         const maxWidth = width - (padding * 2);
 
                         for (let n = 0; n < words.length; n++) {
                             const testLine = line + words[n] + ' ';
                             const metrics = ctx.measureText(testLine);
-                            const testWidth = metrics.width;
-                            if (testWidth > maxWidth && n > 0) {
+                            if (metrics.width > maxWidth && n > 0) {
                                 ctx.fillText(line, textAnn.x + padding, y);
                                 line = words[n] + ' ';
                                 y += lineHeight;
-                            }
-                            else {
+                            } else {
                                 line = testLine;
                             }
                         }
                         ctx.fillText(line, textAnn.x + padding, y);
 
                     } else {
+                        // Regular text rendering
                         ctx.fillStyle = textAnn.color;
                         ctx.textBaseline = 'top';
-                        ctx.fillText(textAnn.text, textAnn.x, textAnn.y);
+
+                        // Apply text alignment
+                        if (textAlignment === 'center') {
+                            ctx.textAlign = 'center';
+                            ctx.fillText(textAnn.text, textAnn.x + (textAnn.width || 0) / 2, textAnn.y);
+                        } else if (textAlignment === 'right') {
+                            ctx.textAlign = 'right';
+                            ctx.fillText(textAnn.text, textAnn.x + (textAnn.width || 0), textAnn.y);
+                        } else {
+                            ctx.textAlign = 'left';
+                            ctx.fillText(textAnn.text, textAnn.x, textAnn.y);
+                        }
                     }
                 }
             });
-        }
 
-        // Render current drawing path
-        if (isDrawing && currentPath.length > 0) {
-            ctx.save();
-            if (activeTool === ToolType.ERASER) {
-                ctx.globalCompositeOperation = 'destination-out';
+            // Render current drawing path
+            if (isDrawing && currentPath.length > 0) {
+                ctx.save();
+                if (activeTool === ToolType.ERASER) {
+                    ctx.globalCompositeOperation = 'destination-out';
+                }
+
+                ctx.beginPath();
+                ctx.moveTo(currentPath[0].x, currentPath[0].y);
+                currentPath.forEach(p => ctx.lineTo(p.x, p.y));
+
+                ctx.strokeStyle = activeTool === ToolType.HIGHLIGHT ? activeColor : (activeTool === ToolType.ERASER ? '#000000' : activeColor);
+                ctx.lineWidth = activeTool === ToolType.HIGHLIGHT ? highlighterSize : (activeTool === ToolType.ERASER ? 20 : brushSize);
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.globalAlpha = activeTool === ToolType.HIGHLIGHT ? 0.4 : 1.0;
+                ctx.stroke();
+
+                ctx.restore();
             }
 
-            ctx.beginPath();
-            ctx.moveTo(currentPath[0].x, currentPath[0].y);
-            currentPath.forEach(p => ctx.lineTo(p.x, p.y));
-
-            ctx.strokeStyle = activeTool === ToolType.HIGHLIGHT ? '#FFFF00' : (activeTool === ToolType.ERASER ? '#000000' : activeColor);
-            ctx.lineWidth = activeTool === ToolType.HIGHLIGHT ? 20 : (activeTool === ToolType.ERASER ? 20 : 2);
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            ctx.globalAlpha = activeTool === ToolType.HIGHLIGHT ? 0.4 : 1.0;
-            ctx.stroke();
-
             ctx.restore();
+        };
+
+        const rAF = requestAnimationFrame(render);
+        return () => cancelAnimationFrame(rAF);
+
+    }, [pageAnnotations, scale, isDrawing, currentPath, activeTool, activeColor, brushSize, highlighterSize, canvasSize, forceRender, textAlignment, stickyColor]);
+
+    // Mouse handlers
+    const handleMouseDown = (e: React.MouseEvent) => {
+        const coords = getCoords(e);
+
+        if (activeTool === ToolType.MOVE) {
+            const hitAnnotation = [...pageAnnotations].reverse().find(ann => {
+                if (ann.type !== 'text') return false;
+                const textAnn = ann as TextAnnotation;
+                return coords.x >= textAnn.x && coords.x <= textAnn.x + (textAnn.width || 100) &&
+                    coords.y >= textAnn.y && coords.y <= textAnn.y + (textAnn.height || 30);
+            });
+
+            if (hitAnnotation) {
+                setIsMoving(true);
+                setMovingAnnotationId(hitAnnotation.id);
+                setMoveStartPos(coords);
+            }
+            return;
         }
 
-        // Render text selection box
-        if (isDraggingText && textStartPos && textCurrentPos) {
-            const x = Math.min(textStartPos.x, textCurrentPos.x);
-            const y = Math.min(textStartPos.y, textCurrentPos.y);
-            const w = Math.abs(textCurrentPos.x - textStartPos.x);
-            const h = Math.abs(textCurrentPos.y - textStartPos.y);
+        if (activeTool === ToolType.PEN || activeTool === ToolType.HIGHLIGHT || activeTool === ToolType.ERASER) {
+            setIsDrawing(true);
+            setCurrentPath([coords]);
+        } else if (activeTool === ToolType.TEXT || activeTool === ToolType.STICKY) {
+            // Click to create text editor
+            setActiveTextEditor({
+                x: coords.x,
+                y: coords.y,
+                width: activeTool === ToolType.STICKY ? 200 : 200, // Fixed width for sticky, initial for text
+                height: activeTool === ToolType.STICKY ? 150 : 30, // Fixed height for sticky
+            });
+            setEditingText("");
+        }
+    };
 
-            ctx.strokeStyle = '#4F46E5';
-            ctx.lineWidth = 2;
-            ctx.setLineDash([5, 5]);
-            ctx.strokeRect(x, y, w, h);
-            ctx.setLineDash([]);
+    const handleMouseMove = (e: React.MouseEvent) => {
+        const coords = getCoords(e);
 
-            ctx.fillStyle = 'rgba(79, 70, 229, 0.1)';
-            ctx.fillRect(x, y, w, h);
+        if (isMoving && moveStartPos && movingAnnotationId) {
+            if (canvasRef.current) {
+                canvasRef.current.style.cursor = 'grabbing';
+            }
+            return;
         }
 
-        ctx.restore();
+        if (isDrawing) {
+            setCurrentPath(prev => [...prev, coords]);
+        }
     };
 
-    // Use requestAnimationFrame to ensure we draw after layout updates
-    const rAF = requestAnimationFrame(render);
+    const handleMouseUp = (e: React.MouseEvent) => {
+        const coords = getCoords(e);
 
-    return () => {
-        cancelAnimationFrame(rAF);
+        if (isMoving && moveStartPos && movingAnnotationId) {
+            const dx = coords.x - moveStartPos.x;
+            const dy = coords.y - moveStartPos.y;
+
+            const ann = pageAnnotations.find(a => a.id === movingAnnotationId);
+            if (ann && ann.type === 'text') {
+                const textAnn = ann as TextAnnotation;
+                const updatedAnn: TextAnnotation = {
+                    ...textAnn,
+                    x: textAnn.x + dx,
+                    y: textAnn.y + dy
+                };
+                updateAnnotation(updatedAnn);
+            }
+
+            setIsMoving(false);
+            setMovingAnnotationId(null);
+            setMoveStartPos(null);
+            if (canvasRef.current) {
+                canvasRef.current.style.cursor = activeTool === ToolType.MOVE ? 'grab' : 'crosshair';
+            }
+            return;
+        }
+
+        if (isDrawing) {
+            setIsDrawing(false);
+            if (currentPath.length > 1) {
+                const newAnnotation: PathAnnotation = {
+                    id: Date.now().toString(),
+                    type: activeTool === ToolType.HIGHLIGHT ? 'highlight' : (activeTool === ToolType.ERASER ? 'eraser' : 'path'),
+                    page: pageNumber,
+                    userId,
+                    points: currentPath,
+                    color: activeTool === ToolType.HIGHLIGHT ? activeColor : (activeTool === ToolType.ERASER ? '#000000' : activeColor),
+                    width: activeTool === ToolType.HIGHLIGHT ? highlighterSize : (activeTool === ToolType.ERASER ? 20 : brushSize),
+                    opacity: activeTool === ToolType.HIGHLIGHT ? 0.4 : 1.0
+                };
+                addAnnotation(newAnnotation);
+                if (onAnnotationCreate) {
+                    onAnnotationCreate(newAnnotation);
+                }
+            }
+            setCurrentPath([]);
+        }
     };
 
-}, [pageAnnotations, scale, pageNumber, isDrawing, currentPath, activeTool, isDraggingText, textStartPos, textCurrentPos, activeColor, canvasSize, forceRender]);
+    // Double-click to edit existing text
+    const handleDoubleClick = (e: React.MouseEvent) => {
+        const coords = getCoords(e);
 
-// Mouse handlers
-const handleMouseDown = (e: React.MouseEvent) => {
-    const coords = getCoords(e);
-
-    if (activeTool === ToolType.MOVE) {
         const hitAnnotation = [...pageAnnotations].reverse().find(ann => {
             if (ann.type !== 'text') return false;
             const textAnn = ann as TextAnnotation;
@@ -245,220 +361,179 @@ const handleMouseDown = (e: React.MouseEvent) => {
         });
 
         if (hitAnnotation) {
-            setIsMoving(true);
-            setMovingAnnotationId(hitAnnotation.id);
-            setMoveStartPos(coords);
+            const textAnn = hitAnnotation as TextAnnotation;
+            setActiveTextEditor({
+                x: textAnn.x,
+                y: textAnn.y,
+                width: textAnn.width || 200,
+                height: textAnn.height || 50,
+                annotationId: textAnn.id
+            });
+            setEditingText(textAnn.text);
         }
-        return;
-    }
+    };
 
-    if (activeTool === ToolType.PEN || activeTool === ToolType.HIGHLIGHT || activeTool === ToolType.ERASER) {
-        setIsDrawing(true);
-        setCurrentPath([coords]);
-    } else if (activeTool === ToolType.TEXT || activeTool === ToolType.STICKY) {
-        setIsDraggingText(true);
-        setTextStartPos(coords);
-        setTextCurrentPos(coords);
-    }
-};
-
-const handleMouseMove = (e: React.MouseEvent) => {
-    const coords = getCoords(e);
-
-    if (isMoving && moveStartPos && movingAnnotationId) {
-        if (canvasRef.current) {
-            canvasRef.current.style.cursor = 'grabbing';
-        }
-        return;
-    }
-
-    if (isDrawing) {
-        setCurrentPath(prev => [...prev, coords]);
-    } else if (isDraggingText && textStartPos) {
-        setTextCurrentPos(coords);
-    }
-};
-
-const handleMouseUp = (e: React.MouseEvent) => {
-    const coords = getCoords(e);
-
-    if (isMoving && moveStartPos && movingAnnotationId) {
-        const dx = coords.x - moveStartPos.x;
-        const dy = coords.y - moveStartPos.y;
-
-        const ann = pageAnnotations.find(a => a.id === movingAnnotationId);
-        if (ann && ann.type === 'text') {
-            const textAnn = ann as TextAnnotation;
-            const updatedAnn: TextAnnotation = {
-                ...textAnn,
-                x: textAnn.x + dx,
-                y: textAnn.y + dy
-            };
-            updateAnnotation(updatedAnn);
-        }
-
-        setIsMoving(false);
-        setMovingAnnotationId(null);
-        setMoveStartPos(null);
-        if (canvasRef.current) {
-            canvasRef.current.style.cursor = activeTool === ToolType.MOVE ? 'grab' : 'crosshair';
-        }
-        return;
-    }
-
-    if (isDrawing) {
-        setIsDrawing(false);
-        if (currentPath.length > 1) {
-            const newAnnotation: PathAnnotation = {
-                id: Date.now().toString(),
-                type: activeTool === ToolType.HIGHLIGHT ? 'highlight' : (activeTool === ToolType.ERASER ? 'eraser' : 'path'),
+    const handleTextBlur = () => {
+        if (activeTextEditor && editingText.trim()) {
+            const newAnnotation: TextAnnotation = {
+                id: activeTextEditor.annotationId || Date.now().toString(),
+                type: 'text',
                 page: pageNumber,
                 userId,
-                points: currentPath,
-                color: activeTool === ToolType.HIGHLIGHT ? '#FFFF00' : (activeTool === ToolType.ERASER ? '#000000' : activeColor),
-                width: activeTool === ToolType.HIGHLIGHT ? 20 : (activeTool === ToolType.ERASER ? 20 : 2),
-                opacity: activeTool === ToolType.HIGHLIGHT ? 0.4 : 1.0
+                text: editingText,
+                x: activeTextEditor.x,
+                y: activeTextEditor.y,
+                fontSize: activeTool === ToolType.STICKY ? 16 : fontSize,
+                fontFamily: activeTool === ToolType.STICKY ? 'Arial' : 'Dancing Script',
+                color: activeTool === ToolType.STICKY ? stickyColor : activeColor,
+                width: activeTextEditor.width,
+                height: activeTextEditor.height
             };
-            addAnnotation(newAnnotation);
+
+            const exists = annotations.some(a => a.id === newAnnotation.id);
+            if (exists) {
+                updateAnnotation(newAnnotation);
+            } else {
+                addAnnotation(newAnnotation);
+            }
+
+            if (onAnnotationCreate) {
+                onAnnotationCreate(newAnnotation);
+            }
         }
-        setCurrentPath([]);
-    } else if (isDraggingText && textStartPos && textCurrentPos) {
-        setIsDraggingText(false);
-        const width = Math.abs(textCurrentPos.x - textStartPos.x);
-        const height = Math.abs(textCurrentPos.y - textStartPos.y);
+        setActiveTextEditor(null);
+        setEditingText("");
+    };
 
-        if (width > 20 && height > 20) {
-            const editorX = Math.min(textStartPos.x, textCurrentPos.x);
-            const editorY = Math.min(textStartPos.y, textCurrentPos.y);
-            setActiveTextEditor({
-                x: editorX,
-                y: editorY,
-                width,
-                height
-            });
-            setEditingText("");
+    // Handle real-time text updates with auto-expand for text (not sticky)
+    const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        const newText = e.target.value;
+        setEditingText(newText);
+
+        if (activeTextEditor) {
+            const annotationId = activeTextEditor.annotationId || Date.now().toString();
+
+            if (!activeTextEditor.annotationId) {
+                setActiveTextEditor(prev => prev ? { ...prev, annotationId } : null);
+            }
+
+            // Auto-expand width for TEXT tool only (not sticky)
+            let newWidth = activeTextEditor.width;
+            if (activeTool === ToolType.TEXT) {
+                const estimatedWidth = Math.max(200, newText.length * (fontSize * 0.6));
+                newWidth = Math.min(estimatedWidth, 800);
+
+                if (newWidth !== activeTextEditor.width) {
+                    setActiveTextEditor(prev => prev ? { ...prev, width: newWidth } : null);
+                }
+            }
+
+            const textAnn: TextAnnotation = {
+                id: annotationId,
+                type: 'text',
+                page: pageNumber,
+                userId,
+                text: newText,
+                x: activeTextEditor.x,
+                y: activeTextEditor.y,
+                fontSize: activeTool === ToolType.STICKY ? 16 : fontSize,
+                fontFamily: activeTool === ToolType.STICKY ? 'Arial' : 'Dancing Script',
+                color: activeTool === ToolType.STICKY ? stickyColor : activeColor,
+                width: newWidth,
+                height: activeTextEditor.height
+            };
+
+            const exists = annotations.some(a => a.id === annotationId);
+            if (exists) {
+                updateAnnotation(textAnn);
+            } else {
+                addAnnotation(textAnn);
+            }
+
+            if (onAnnotationCreate) {
+                onAnnotationCreate(textAnn);
+            }
         }
-        setTextStartPos(null);
-        setTextCurrentPos(null);
-    }
-};
+    };
 
-// Double-click to edit existing text
-const handleDoubleClick = (e: React.MouseEvent) => {
-    const coords = getCoords(e);
-
-    const hitAnnotation = [...pageAnnotations].reverse().find(ann => {
-        if (ann.type !== 'text') return false;
-        const textAnn = ann as TextAnnotation;
-        return coords.x >= textAnn.x && coords.x <= textAnn.x + (textAnn.width || 100) &&
-            coords.y >= textAnn.y && coords.y <= textAnn.y + (textAnn.height || 30);
-    });
-
-    if (hitAnnotation) {
-        const textAnn = hitAnnotation as TextAnnotation;
-        // Don't remove, just edit. We'll update on blur.
-        // Actually, to edit we need to remove it from canvas and show editor
-        // or just show editor on top.
-        // Original code removed it. Let's stick to that for simplicity.
-        removeAnnotation(textAnn.id);
-        setActiveTextEditor({
-            x: textAnn.x,
-            y: textAnn.y,
-            width: textAnn.width || 200,
-            height: textAnn.height || 50,
-            annotationId: textAnn.id
-        });
-        setEditingText(textAnn.text);
-    }
-};
-
-const handleTextBlur = () => {
-    if (activeTextEditor && editingText.trim()) {
-        const newAnnotation: TextAnnotation = {
-            id: activeTextEditor.annotationId || Date.now().toString(),
-            type: 'text',
-            page: pageNumber,
-            userId,
-            text: editingText,
-            x: activeTextEditor.x,
-            y: activeTextEditor.y,
-            fontSize: activeTool === ToolType.STICKY ? 16 : 20,
-            fontFamily: activeTool === ToolType.STICKY ? 'Arial' : 'Dancing Script',
-            color: activeTool === ToolType.STICKY ? '#000000' : activeColor,
-            width: activeTextEditor.width,
-            height: activeTextEditor.height
-        };
-        addAnnotation(newAnnotation);
-    }
-    setActiveTextEditor(null);
-    setEditingText("");
-};
-
-// Update cursor based on tool
-useEffect(() => {
-    if (canvasRef.current) {
-        if (activeTool === ToolType.MOVE) {
-            canvasRef.current.style.cursor = isMoving ? 'grabbing' : 'grab';
-        } else {
-            canvasRef.current.style.cursor = 'crosshair';
+    // Update cursor based on tool
+    useEffect(() => {
+        if (canvasRef.current) {
+            if (activeTool === ToolType.CURSOR) {
+                canvasRef.current.style.cursor = 'default';
+            } else if (activeTool === ToolType.MOVE) {
+                canvasRef.current.style.cursor = isMoving ? 'grabbing' : 'grab';
+            } else if (activeTool === ToolType.PEN) {
+                canvasRef.current.style.cursor = 'crosshair';
+            } else if (activeTool === ToolType.HIGHLIGHT) {
+                canvasRef.current.style.cursor = 'cell';
+            } else if (activeTool === ToolType.ERASER) {
+                canvasRef.current.style.cursor = 'not-allowed';
+            } else if (activeTool === ToolType.TEXT || activeTool === ToolType.STICKY) {
+                canvasRef.current.style.cursor = 'text';
+            } else {
+                canvasRef.current.style.cursor = 'crosshair';
+            }
         }
-    }
-}, [activeTool, isMoving]);
+    }, [activeTool, isMoving]);
 
-return (
-    <div
-        ref={containerRef}
-        className="absolute inset-0 w-full h-full pointer-events-none"
-        style={{ zIndex: 10 }}
-    >
-        <canvas
-            ref={canvasRef}
-            className={`w-full h-full pointer-events-auto ${activeTool !== ToolType.CURSOR ? 'cursor-crosshair' : ''}`}
-            onMouseDown={handleMouseDown}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseUp}
-            onDoubleClick={handleDoubleClick}
-            style={{ pointerEvents: activeTool === 'cursor' ? 'none' : 'auto' }}
-        />
+    return (
+        <div
+            ref={containerRef}
+            className="absolute inset-0 w-full h-full pointer-events-none"
+            style={{ zIndex: 10 }}
+        >
+            <canvas
+                ref={canvasRef}
+                className="w-full h-full pointer-events-auto"
+                onMouseDown={handleMouseDown}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseUp}
+                onDoubleClick={handleDoubleClick}
+                style={{ pointerEvents: activeTool === 'cursor' ? 'none' : 'auto' }}
+            />
 
-        {/* Text Editor Overlay */}
-        {activeTextEditor && (
-            <div
-                className={`absolute pointer-events-auto ${activeTool === ToolType.STICKY ? 'bg-yellow-100 shadow-xl' : ''}`}
-                style={{
-                    left: `${activeTextEditor.x * scale}px`,
-                    top: `${activeTextEditor.y * scale}px`,
-                    width: `${activeTextEditor.width * scale}px`,
-                    height: `${activeTextEditor.height * scale}px`,
-                }}
-            >
-                <textarea
-                    autoFocus
-                    value={editingText}
-                    onChange={handleTextChange}
-                    onBlur={handleTextBlur}
-                    onKeyDown={(e) => {
-                        if (e.key === 'Escape') {
-                            setActiveTextEditor(null);
-                            setEditingText("");
-                        } else if (e.key === 'Enter' && e.ctrlKey) {
-                            handleTextBlur();
-                        }
-                    }}
-                    className={`w-full h-full p-2 border-2 rounded resize-none outline-none shadow-lg ${activeTool === ToolType.STICKY
-                        ? 'bg-yellow-100 border-yellow-400'
-                        : 'bg-transparent border-primary'
-                        }`}
+            {/* Text Editor Overlay */}
+            {activeTextEditor && (
+                <div
+                    className="absolute pointer-events-auto"
                     style={{
-                        fontFamily: activeTool === ToolType.STICKY ? 'Arial, sans-serif' : '"Dancing Script", cursive',
-                        fontSize: activeTool === ToolType.STICKY ? `${16 * scale}px` : `${20 * scale}px`,
-                        color: activeTool === ToolType.STICKY ? '#000000' : activeColor
+                        left: `${activeTextEditor.x * scale}px`,
+                        top: `${activeTextEditor.y * scale}px`,
+                        width: `${activeTextEditor.width * scale}px`,
+                        height: `${activeTextEditor.height * scale}px`,
+                        backgroundColor: activeTool === ToolType.STICKY ? stickyColor : 'transparent',
                     }}
-                    placeholder={activeTool === ToolType.STICKY ? "Sticky note..." : "Type text here... (Ctrl+Enter to save)"}
-                />
-            </div>
-        )}
-    </div>
-);
+                >
+                    <textarea
+                        autoFocus
+                        value={editingText}
+                        onChange={handleTextChange}
+                        onBlur={handleTextBlur}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Escape') {
+                                setActiveTextEditor(null);
+                                setEditingText("");
+                            } else if (e.key === 'Enter' && e.ctrlKey) {
+                                handleTextBlur();
+                            }
+                        }}
+                        className={`w-full h-full p-2 border-2 rounded resize-none outline-none shadow-lg ${activeTool === ToolType.STICKY
+                                ? 'border-gray-400'
+                                : 'bg-transparent border-primary'
+                            }`}
+                        style={{
+                            fontFamily: activeTool === ToolType.STICKY ? 'Arial, sans-serif' : '"Dancing Script", cursive',
+                            fontSize: activeTool === ToolType.STICKY ? `${16 * scale}px` : `${fontSize * scale}px`,
+                            color: activeTool === ToolType.STICKY ? '#000000' : activeColor,
+                            textAlign: textAlignment,
+                            backgroundColor: activeTool === ToolType.STICKY ? 'transparent' : 'transparent',
+                        }}
+                        placeholder={activeTool === ToolType.STICKY ? "Sticky note..." : "Type text... (Ctrl+Enter to save)"}
+                    />
+                </div>
+            )}
+        </div>
+    );
 };

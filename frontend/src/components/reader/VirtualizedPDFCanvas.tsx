@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { Document } from 'react-pdf';
 import { Virtuoso } from 'react-virtuoso';
 import { usePDFStore } from '@/store/usePDFStore';
@@ -12,8 +12,9 @@ interface VirtualizedPDFCanvasProps {
 }
 
 export const VirtualizedPDFCanvas: React.FC<VirtualizedPDFCanvasProps> = ({ userId, onAnnotationCreate }) => {
-    const { pdfUrl, numPages, setNumPages, setCurrentPage, scale } = usePDFStore();
+    const { pdfUrl, numPages, setNumPages, setCurrentPage, scale, zoomIn, zoomOut, setScale } = usePDFStore();
     const virtuosoRef = useRef<any>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
 
     const handleDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
         setNumPages(numPages);
@@ -24,6 +25,32 @@ export const VirtualizedPDFCanvas: React.FC<VirtualizedPDFCanvasProps> = ({ user
         console.error('Error loading PDF:', error);
     };
 
+    // Handle Ctrl+Scroll zoom
+    useEffect(() => {
+        const container = containerRef.current;
+        if (!container) return;
+
+        const handleWheel = (e: WheelEvent) => {
+            // Only handle if Ctrl is pressed
+            if (e.ctrlKey) {
+                e.preventDefault(); // Prevent browser zoom
+
+                // Zoom in/out based on scroll direction
+                if (e.deltaY < 0) {
+                    zoomIn();
+                } else {
+                    zoomOut();
+                }
+            }
+        };
+
+        container.addEventListener('wheel', handleWheel, { passive: false });
+
+        return () => {
+            container.removeEventListener('wheel', handleWheel);
+        };
+    }, [zoomIn, zoomOut]);
+
     if (!pdfUrl) {
         return (
             <div className="flex items-center justify-center h-full">
@@ -33,7 +60,11 @@ export const VirtualizedPDFCanvas: React.FC<VirtualizedPDFCanvasProps> = ({ user
     }
 
     return (
-        <div className="h-full w-full bg-muted/30" style={{ position: 'relative' }}>
+        <div
+            ref={containerRef}
+            className="h-full w-full bg-muted/30 select-none"
+            style={{ position: 'relative', userSelect: 'none' }}
+        >
             <Document
                 file={pdfUrl}
                 onLoadSuccess={handleDocumentLoadSuccess}

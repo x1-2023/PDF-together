@@ -16,6 +16,7 @@ import { usePDFStore } from "@/store/usePDFStore";
 import { useUIStore } from "@/store/useUIStore";
 import { VirtualizedPDFCanvas } from "@/components/reader/VirtualizedPDFCanvas";
 import { VirtualizedSidebar } from "@/components/reader/VirtualizedSidebar";
+import { ToolSettingsPanel } from "@/components/reader/ToolSettingsPanel";
 
 import { useWebSocket } from "@/hooks/useWebSocket";
 
@@ -51,6 +52,28 @@ const Reader = () => {
         .catch(err => console.error('Failed to fetch PDF data:', err));
     }
   }, [id, setPdfUrl]);
+
+  // Handle Ctrl+Scroll zoom globally to prevent browser zoom
+  useEffect(() => {
+    const handleWheel = (e: WheelEvent) => {
+      if (e.ctrlKey) {
+        e.preventDefault();
+
+        if (e.deltaY < 0) {
+          zoomIn();
+        } else {
+          zoomOut();
+        }
+      }
+    };
+
+    // Add to document to catch all wheel events
+    document.addEventListener('wheel', handleWheel, { passive: false });
+
+    return () => {
+      document.removeEventListener('wheel', handleWheel);
+    };
+  }, [zoomIn, zoomOut]);
 
   // Handle jump to page
   const handleJumpToPage = () => {
@@ -155,18 +178,9 @@ const Reader = () => {
 
             {/* Floating Tool Dock */}
             <div className="fixed bottom-6 left-1/2 -translate-x-1/2 floating-dock px-3 py-2 flex flex-col items-center gap-2 z-30">
-              {/* Color Picker (Only for Pen, Highlight, Text) */}
-              {['pen', 'highlight', 'text'].includes(activeTool) && (
-                <div className="flex items-center gap-1 bg-background/90 backdrop-blur-sm p-1.5 rounded-full border border-border shadow-sm mb-1 animate-in fade-in slide-in-from-bottom-2">
-                  {['#000000', '#EF4444', '#22C55E', '#3B82F6', '#EAB308', '#A855F7'].map((color) => (
-                    <button
-                      key={color}
-                      onClick={() => useUIStore.getState().setActiveColor(color)}
-                      className={`w-6 h-6 rounded-full border border-border transition-transform hover:scale-110 ${useUIStore.getState().activeColor === color ? 'ring-2 ring-primary ring-offset-1' : ''}`}
-                      style={{ backgroundColor: color }}
-                    />
-                  ))}
-                </div>
+              {/* Tool Settings Panel */}
+              {activeTool !== 'cursor' && (
+                <ToolSettingsPanel onClose={() => setActiveTool('cursor')} />
               )}
 
               <div className="flex items-center gap-1 px-3 py-2 bg-card/90 backdrop-blur-md border border-border/50 shadow-warm-lg rounded-full">
