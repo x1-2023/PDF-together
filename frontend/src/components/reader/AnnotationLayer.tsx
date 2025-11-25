@@ -565,6 +565,11 @@ export const AnnotationLayer: React.FC<AnnotationLayerProps> = ({
     // Delete key handler for selected annotations
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
+            // Ignore if typing in an input or textarea
+            if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+                return;
+            }
+
             if (e.key === 'Delete' && selectedAnnotationIds.length > 0) {
                 // Remove all selected annotations
                 const { removeAnnotation } = usePDFStore.getState();
