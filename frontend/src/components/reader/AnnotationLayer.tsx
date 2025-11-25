@@ -47,6 +47,7 @@ export const AnnotationLayer: React.FC<AnnotationLayerProps> = ({
         width: number;
         height: number;
         annotationId?: string;
+        isSticky?: boolean; // Track if editing a sticky note
     } | null>(null);
     const [editingText, setEditingText] = useState("");
 
@@ -275,11 +276,13 @@ export const AnnotationLayer: React.FC<AnnotationLayerProps> = ({
             setCurrentPath([coords]);
         } else if (activeTool === ToolType.TEXT) {
             // TEXT tool: Click to create text editor
+            console.log('Creating TEXT editor at:', coords);
             setActiveTextEditor({
                 x: coords.x,
                 y: coords.y,
                 width: 200,
                 height: 30,
+                isSticky: false,
             });
             setEditingText("");
         } else if (activeTool === ToolType.STICKY) {
@@ -382,12 +385,15 @@ export const AnnotationLayer: React.FC<AnnotationLayerProps> = ({
 
         if (hitAnnotation) {
             const textAnn = hitAnnotation as TextAnnotation;
+            const isSticky = textAnn.fontFamily === 'Arial';
+            console.log('Double-click edit:', textAnn, 'isSticky:', isSticky);
             setActiveTextEditor({
                 x: textAnn.x,
                 y: textAnn.y,
                 width: textAnn.width || 200,
                 height: textAnn.height || 50,
-                annotationId: textAnn.id
+                annotationId: textAnn.id,
+                isSticky: isSticky,
             });
             setEditingText(textAnn.text);
         }
@@ -497,6 +503,11 @@ export const AnnotationLayer: React.FC<AnnotationLayerProps> = ({
         }
     }, [activeTool, isMoving]);
 
+    // Debug: Log activeTextEditor state changes
+    useEffect(() => {
+        console.log('activeTextEditor state:', activeTextEditor);
+    }, [activeTextEditor]);
+
     return (
         <div
             ref={containerRef}
@@ -523,7 +534,8 @@ export const AnnotationLayer: React.FC<AnnotationLayerProps> = ({
                         top: `${activeTextEditor.y * scale}px`,
                         width: `${activeTextEditor.width * scale}px`,
                         height: `${activeTextEditor.height * scale}px`,
-                        backgroundColor: activeTool === ToolType.STICKY ? stickyColor : 'transparent',
+                        backgroundColor: activeTextEditor.isSticky ? stickyColor : 'transparent',
+                        zIndex: 50,
                     }}
                 >
                     <textarea
