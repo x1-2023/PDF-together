@@ -1,0 +1,300 @@
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { 
+  ArrowLeft, ZoomIn, ZoomOut, Undo2, Redo2, 
+  MousePointer, Pen, Highlighter, Eraser, Type, 
+  StickyNote, Sparkles, MessageSquare, Users, FileText,
+  Send
+} from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+
+const Reader = () => {
+  const navigate = useNavigate();
+  const [activeTool, setActiveTool] = useState<string>("cursor");
+  const [activeTab, setActiveTab] = useState("notes");
+  const [message, setMessage] = useState("");
+
+  const tools = [
+    { id: "cursor", icon: MousePointer, label: "Con trỏ" },
+    { id: "pen", icon: Pen, label: "Bút" },
+    { id: "highlighter", icon: Highlighter, label: "Đánh dấu" },
+    { id: "eraser", icon: Eraser, label: "Tẩy" },
+    { id: "text", icon: Type, label: "Văn bản" },
+    { id: "note", icon: StickyNote, label: "Ghi chú" },
+    { id: "ai", icon: Sparkles, label: "AI" },
+  ];
+
+  const mockPages = Array.from({ length: 12 }, (_, i) => i + 1);
+  const mockUsers = [
+    { id: 1, name: "Bạn", status: "online", color: "bg-primary" },
+    { id: 2, name: "Minh", status: "online", color: "bg-secondary" },
+    { id: 3, name: "Hương", status: "away", color: "bg-accent" },
+  ];
+
+  const mockMessages = [
+    { id: 1, user: "Minh", message: "Trang 5 này khó quá!", time: "14:23", color: "bg-secondary" },
+    { id: 2, user: "Bạn", message: "Để mình giải thích nhé", time: "14:24", color: "bg-primary" },
+  ];
+
+  return (
+    <div className="h-screen flex flex-col bg-background">
+      {/* Top Bar */}
+      <header className="h-14 border-b border-border bg-cream/90 backdrop-blur-sm flex items-center justify-between px-4 z-40">
+        <div className="flex items-center gap-3">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate('/')}
+            className="w-9 h-9 rounded-full"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
+          <div>
+            <h2 className="font-heading font-bold text-sm">React Hooks và State</h2>
+            <p className="text-xs text-muted-foreground">12 trang • 5 người</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <div className="hidden sm:flex items-center gap-1 bg-card rounded-full px-2 py-1 shadow-warm-sm">
+            <Button variant="ghost" size="icon" className="w-8 h-8 rounded-full">
+              <ZoomOut className="w-4 h-4" />
+            </Button>
+            <span className="text-sm font-medium px-2">100%</span>
+            <Button variant="ghost" size="icon" className="w-8 h-8 rounded-full">
+              <ZoomIn className="w-4 h-4" />
+            </Button>
+          </div>
+          
+          <div className="hidden sm:flex items-center gap-1">
+            <Button variant="ghost" size="icon" className="w-9 h-9 rounded-full">
+              <Undo2 className="w-4 h-4" />
+            </Button>
+            <Button variant="ghost" size="icon" className="w-9 h-9 rounded-full">
+              <Redo2 className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Layout */}
+      <div className="flex-1 overflow-hidden">
+        <ResizablePanelGroup direction="horizontal" className="h-full">
+          {/* Left Sidebar: Thumbnails */}
+          <ResizablePanel defaultSize={18} minSize={15} maxSize={25} className="hidden lg:block">
+            <div className="h-full bg-card border-r border-border">
+              <div className="p-3 border-b border-border">
+                <h3 className="font-heading font-bold text-sm">Trang</h3>
+              </div>
+              <ScrollArea className="h-[calc(100%-3rem)]">
+                <div className="p-2 space-y-2">
+                  {mockPages.map((page) => (
+                    <div
+                      key={page}
+                      className={`
+                        relative rounded-lg overflow-hidden cursor-pointer transition-all
+                        ${page === 5 
+                          ? 'ring-2 ring-primary shadow-warm-md' 
+                          : 'hover:ring-2 hover:ring-primary/50 shadow-warm-sm'
+                        }
+                      `}
+                    >
+                      <div className="aspect-[2/3] bg-muted flex items-center justify-center">
+                        <FileText className="w-5 h-5 text-muted-foreground/30" />
+                      </div>
+                      <div className="absolute bottom-1 left-1 w-5 h-5 rounded-full bg-background/90 backdrop-blur-sm flex items-center justify-center text-[10px] font-bold">
+                        {page}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            </div>
+          </ResizablePanel>
+
+          <ResizableHandle className="hidden lg:flex w-1 bg-border hover:bg-primary/20 transition-colors" />
+
+          {/* Main Content: PDF Canvas */}
+          <ResizablePanel defaultSize={55} minSize={40}>
+            <ScrollArea className="h-full">
+              <div className="flex flex-col items-center bg-muted/20 py-6 px-4 space-y-6">
+                {/* PDF Pages - Scrollable */}
+                {mockPages.map((page) => (
+                  <div 
+                    key={page}
+                    className="w-full max-w-3xl aspect-[3/4] bg-white rounded-lg shadow-warm-lg flex items-center justify-center"
+                  >
+                    <div className="text-center space-y-4">
+                      <FileText className="w-16 h-16 text-muted-foreground/30 mx-auto" />
+                      <p className="text-muted-foreground">PDF Canvas Area</p>
+                      <p className="text-sm text-muted-foreground">Trang {page} / 12</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+
+            {/* Floating Tool Dock */}
+            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 floating-dock px-3 py-2 flex items-center gap-1 z-30">
+              {tools.map((tool) => {
+                const Icon = tool.icon;
+                return (
+                  <button
+                    key={tool.id}
+                    onClick={() => setActiveTool(tool.id)}
+                    className={`
+                      w-11 h-11 rounded-full flex items-center justify-center transition-all
+                      ${activeTool === tool.id
+                        ? 'bg-gradient-to-br from-primary-light to-primary text-primary-foreground shadow-warm-md scale-110'
+                        : 'hover:bg-muted text-muted-foreground hover:text-foreground'
+                      }
+                    `}
+                    title={tool.label}
+                  >
+                    <Icon className="w-5 h-5" />
+                  </button>
+                );
+              })}
+            </div>
+          </ResizablePanel>
+
+          <ResizableHandle className="hidden lg:flex w-1 bg-border hover:bg-primary/20 transition-colors" />
+
+          {/* Right Sidebar: Notes, Chat, Users */}
+          <ResizablePanel defaultSize={27} minSize={20} maxSize={35} className="hidden lg:block">
+            <div className="h-full bg-card border-l border-border flex flex-col">
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
+                <TabsList className="w-full justify-start rounded-none border-b border-border bg-transparent p-0 h-12">
+                  <TabsTrigger 
+                    value="notes" 
+                    className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent"
+                  >
+                    <StickyNote className="w-4 h-4 mr-2" />
+                    Ghi chú
+                  </TabsTrigger>
+                  <TabsTrigger 
+                    value="chat"
+                    className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent"
+                  >
+                    <MessageSquare className="w-4 h-4 mr-2" />
+                    Chat
+                  </TabsTrigger>
+                  <TabsTrigger 
+                    value="users"
+                    className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent"
+                  >
+                    <Users className="w-4 h-4 mr-2" />
+                    Người dùng
+                  </TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="notes" className="flex-1 overflow-hidden mt-0">
+                  <ScrollArea className="h-full">
+                    <div className="p-4 space-y-3">
+                      <div className="rounded-xl bg-gradient-to-br from-primary/10 to-transparent p-4 border border-primary/20">
+                        <div className="flex items-start gap-2 mb-2">
+                          <StickyNote className="w-4 h-4 text-primary mt-0.5" />
+                          <div className="flex-1">
+                            <p className="text-xs text-muted-foreground mb-1">Trang 3 • Minh</p>
+                            <p className="text-sm">useState hook rất hữu ích cho state management!</p>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <Button className="w-full h-10 rounded-full bg-gradient-to-r from-primary-light to-primary hover:shadow-warm-md">
+                        <StickyNote className="w-4 h-4 mr-2" />
+                        Thêm ghi chú
+                      </Button>
+                    </div>
+                  </ScrollArea>
+                </TabsContent>
+
+                <TabsContent value="chat" className="flex-1 flex flex-col mt-0">
+                  <div className="p-3 border-b border-border bg-muted/30">
+                    <div className="flex items-center gap-2">
+                      {mockUsers.slice(0, 3).map((user) => (
+                        <Avatar key={user.id} className="w-7 h-7 border-2 border-background">
+                          <AvatarFallback className={user.color}>
+                            {user.name[0]}
+                          </AvatarFallback>
+                        </Avatar>
+                      ))}
+                      <span className="text-xs font-semibold px-2 py-1 rounded-full bg-secondary text-secondary-foreground">
+                        LIVE
+                      </span>
+                    </div>
+                  </div>
+
+                  <ScrollArea className="flex-1">
+                    <div className="p-4 space-y-3">
+                      {mockMessages.map((msg) => (
+                        <div key={msg.id} className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <Avatar className="w-6 h-6">
+                              <AvatarFallback className={msg.color}>
+                                {msg.user[0]}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span className="text-xs font-bold">{msg.user}</span>
+                            <span className="text-xs text-muted-foreground">{msg.time}</span>
+                          </div>
+                          <div className="ml-8 rounded-2xl bg-cream px-3 py-2 text-sm">
+                            {msg.message}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+
+                  <div className="p-3 border-t border-border">
+                    <div className="flex gap-2">
+                      <Input
+                        value={message}
+                        onChange={(e) => setMessage(e.target.value)}
+                        placeholder="Nhập tin nhắn..."
+                        className="rounded-xl flex-1"
+                      />
+                      <Button size="icon" className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-light to-primary">
+                        <Send className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="users" className="flex-1 mt-0">
+                  <ScrollArea className="h-full">
+                    <div className="p-4 space-y-3">
+                      {mockUsers.map((user) => (
+                        <div key={user.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-muted/50 transition-colors">
+                          <Avatar className="w-10 h-10">
+                            <AvatarFallback className={user.color}>
+                              {user.name[0]}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1">
+                            <p className="font-semibold text-sm">{user.name}</p>
+                            <p className="text-xs text-muted-foreground capitalize">{user.status}</p>
+                          </div>
+                          <div className={`w-2.5 h-2.5 rounded-full ${
+                            user.status === 'online' ? 'bg-green-500' : 'bg-yellow-500'
+                          }`} />
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </TabsContent>
+              </Tabs>
+            </div>
+          </ResizablePanel>
+        </ResizablePanelGroup>
+      </div>
+    </div>
+  );
+};
+
+export default Reader;

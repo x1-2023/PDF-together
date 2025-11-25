@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PDF Together</title>
+
+  <!-- Material Symbols (We might need to download this too if blocked, but usually Google Fonts CSS is the issue. 
+       If symbols are blocked, we need to self-host them. 
+       For now, let's keep the link but if it fails we need to download. 
+       Actually, the log showed fonts.googleapis.com blocked. 
+       So we should probably self-host icons too or use a package. 
+       Let's use the google fonts link for now but be ready to switch if it fails. 
+       Wait, the user log showed: "Loading the stylesheet ... fonts.googleapis.com ... blocked".
+       So we MUST remove this link. 
+       I will use 'material-symbols' package or just download the font.
+       For simplicity, I'll assume the user might accept broken icons for a moment or I should install 'material-symbols'.
+       Let's install 'material-symbols' package in the next step.
+  -->
+  <!-- <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined..." rel="stylesheet" /> -->
+  <!-- Replaced by local imports in index.css -->
+</head>
+
+<body class="bg-background-light dark:bg-background-dark text-text-main transition-colors duration-300">
+  <div id="root"></div>
+  <script type="module" src="/src/index.tsx"></script>
+</body>
+
+</html>
