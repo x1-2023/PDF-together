@@ -18,6 +18,7 @@ export const AnnotationLayer: React.FC<AnnotationLayerProps> = ({
 }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
 
     // Stores
     const { annotations, addAnnotation, updateAnnotation } = usePDFStore();
@@ -400,6 +401,7 @@ export const AnnotationLayer: React.FC<AnnotationLayerProps> = ({
     };
 
     const handleTextBlur = () => {
+        console.log('handleTextBlur called, editingText:', editingText);
         if (activeTextEditor && editingText.trim()) {
             const newAnnotation: TextAnnotation = {
                 id: activeTextEditor.annotationId || Date.now().toString(),
@@ -409,9 +411,9 @@ export const AnnotationLayer: React.FC<AnnotationLayerProps> = ({
                 text: editingText,
                 x: activeTextEditor.x,
                 y: activeTextEditor.y,
-                fontSize: activeTool === ToolType.STICKY ? 16 : fontSize,
-                fontFamily: activeTool === ToolType.STICKY ? 'Arial' : 'Dancing Script',
-                color: activeTool === ToolType.STICKY ? stickyColor : activeColor,
+                fontSize: activeTextEditor.isSticky ? 16 : fontSize,
+                fontFamily: activeTextEditor.isSticky ? 'Arial' : 'Dancing Script',
+                color: activeTextEditor.isSticky ? stickyColor : activeColor,
                 width: activeTextEditor.width,
                 height: activeTextEditor.height
             };
@@ -427,6 +429,7 @@ export const AnnotationLayer: React.FC<AnnotationLayerProps> = ({
                 onAnnotationCreate(newAnnotation);
             }
         }
+        console.log('Setting activeTextEditor to null');
         setActiveTextEditor(null);
         setEditingText("");
     };
@@ -506,6 +509,12 @@ export const AnnotationLayer: React.FC<AnnotationLayerProps> = ({
     // Debug: Log activeTextEditor state changes
     useEffect(() => {
         console.log('activeTextEditor state:', activeTextEditor);
+        // Manually focus textarea when text editor is created
+        if (activeTextEditor && textareaRef.current) {
+            setTimeout(() => {
+                textareaRef.current?.focus();
+            }, 50); // Small delay to ensure DOM is ready
+        }
     }, [activeTextEditor]);
 
     return (
@@ -539,7 +548,7 @@ export const AnnotationLayer: React.FC<AnnotationLayerProps> = ({
                     }}
                 >
                     <textarea
-                        autoFocus
+                        ref={textareaRef}
                         value={editingText}
                         onChange={handleTextChange}
                         onBlur={handleTextBlur}
@@ -551,18 +560,18 @@ export const AnnotationLayer: React.FC<AnnotationLayerProps> = ({
                                 handleTextBlur();
                             }
                         }}
-                        className={`w-full h-full p-2 border-2 rounded resize-none outline-none shadow-lg ${activeTool === ToolType.STICKY
-                            ? 'border-gray-400'
-                            : 'bg-transparent border-primary'
+                        className={`w-full h-full p-2 border-2 rounded resize-none outline-none shadow-lg ${activeTextEditor.isSticky
+                                ? 'border-gray-400'
+                                : 'bg-transparent border-primary'
                             }`}
                         style={{
-                            fontFamily: activeTool === ToolType.STICKY ? 'Arial, sans-serif' : '"Dancing Script", cursive',
-                            fontSize: activeTool === ToolType.STICKY ? `${16 * scale}px` : `${fontSize * scale}px`,
-                            color: activeTool === ToolType.STICKY ? '#000000' : activeColor,
+                            fontFamily: activeTextEditor.isSticky ? 'Arial, sans-serif' : '"Dancing Script", cursive',
+                            fontSize: activeTextEditor.isSticky ? `${16 * scale}px` : `${fontSize * scale}px`,
+                            color: activeTextEditor.isSticky ? '#000000' : activeColor,
                             textAlign: textAlignment,
-                            backgroundColor: activeTool === ToolType.STICKY ? 'transparent' : 'transparent',
+                            backgroundColor: activeTextEditor.isSticky ? 'transparent' : 'transparent',
                         }}
-                        placeholder={activeTool === ToolType.STICKY ? "Sticky note..." : "Type text... (Ctrl+Enter to save)"}
+                        placeholder={activeTextEditor.isSticky ? "Sticky note..." : "Type text... (Ctrl+Enter to save)"}
                     />
                 </div>
             )}
