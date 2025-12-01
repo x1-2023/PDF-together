@@ -9,31 +9,16 @@ import { Annotation } from '@/types';
 interface VirtualizedPDFCanvasProps {
     userId?: string;
     onAnnotationCreate?: (annotation: Annotation) => void;
-    initialPage?: number;
 }
 
-export const VirtualizedPDFCanvas: React.FC<VirtualizedPDFCanvasProps> = ({ userId, onAnnotationCreate, initialPage }) => {
+export const VirtualizedPDFCanvas: React.FC<VirtualizedPDFCanvasProps> = ({ userId, onAnnotationCreate }) => {
     const { pdfUrl, numPages, setNumPages, setCurrentPage, scale, zoomIn, zoomOut, setScale } = usePDFStore();
     const virtuosoRef = useRef<any>(null);
     const containerRef = useRef<HTMLDivElement>(null);
-    const hasScrolledToInitial = useRef(false);
 
     const handleDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
         setNumPages(numPages);
         console.log(`PDF loaded: ${numPages} pages`);
-        
-        // Scroll to initial page if provided and not already scrolled
-        if (initialPage && initialPage > 1 && !hasScrolledToInitial.current && virtuosoRef.current) {
-            console.log(`📜 Scrolling to initial page: ${initialPage}`);
-            setTimeout(() => {
-                virtuosoRef.current?.scrollToIndex({
-                    index: initialPage - 1,
-                    align: 'start',
-                    behavior: 'auto'
-                });
-                hasScrolledToInitial.current = true;
-            }, 100); // Small delay to ensure Virtuoso is ready
-        }
     };
 
     const handleDocumentLoadError = (error: Error) => {

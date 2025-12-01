@@ -9,6 +9,7 @@ import { Settings, User, Plus, BookOpen } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { api, PDFFile } from "@/api";
+import { getUserId } from "@/lib/auth";
 
 type FilterType = "all" | "active" | "upcoming" | "completed";
 
@@ -30,7 +31,8 @@ const Dashboard = () => {
   const loadSessions = async () => {
     try {
       setIsLoading(true);
-      const data = await api.fetchSessions();
+      const userId = getUserId();
+      const data = await api.fetchSessions(userId);
       setSessions(data);
     } catch (error) {
       console.error('Failed to load sessions:', error);
@@ -157,7 +159,8 @@ const Dashboard = () => {
                   title={session.title}
                   status="active"
                   participants={1}
-                  progress={0}
+                  progress={session.progress?.percentage || 0}
+                  thumbnail={session.cover || undefined}
                   variant="primary"
                   onClick={() => navigate(`/reader/${session.id}`)}
                   onDelete={() => handleDeleteClick(session.id)}

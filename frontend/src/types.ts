@@ -40,7 +40,7 @@ export interface Page {
     fullUrl: string;
 }
 
-export type AnnotationType = 'path' | 'text' | 'highlight' | 'eraser';
+export type AnnotationType = 'path' | 'text' | 'highlight' | 'eraser' | 'sticky';
 
 export interface BaseAnnotation {
     id: string;
@@ -69,4 +69,13 @@ export interface TextAnnotation extends BaseAnnotation {
     fontFamily?: string;
 }
 
-export type Annotation = PathAnnotation | TextAnnotation;
+export interface StickyAnnotation extends BaseAnnotation {
+    type: 'sticky';
+    x: number;
+    y: number;
+    text: string;
+    color: string; // Background color
+    timestamp?: number; // For sorting and display
+}
+
+export type Annotation = PathAnnotation | TextAnnotation | StickyAnnotation;

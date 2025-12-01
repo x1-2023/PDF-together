@@ -13,16 +13,6 @@ interface AnnotationRow {
   created_at: number;
 }
 
-interface Note {
-  id: string;
-  pdfId: string;
-  page: number;
-  text: string;
-  userId: string;
-  timestamp: number;
-  createdAt: number;
-}
-
 export class DatabaseManager {
   private db: Database.Database;
 
@@ -65,45 +55,7 @@ export class DatabaseManager {
         uploaded_by TEXT,
         created_at INTEGER NOT NULL
       );
-
-      -- Create user_positions table for reading progress
-      CREATE TABLE IF NOT EXISTS user_positions (
-        user_id TEXT NOT NULL,
-        pdf_id TEXT NOT NULL,
-        page INTEGER NOT NULL,
-        scroll_y INTEGER DEFAULT 0,
-        total_pages INTEGER DEFAULT 0,
-        updated_at INTEGER NOT NULL,
-        PRIMARY KEY (user_id, pdf_id)
-      );
-
-      -- Create notes table for text notes
-      CREATE TABLE IF NOT EXISTS notes (
-        id TEXT PRIMARY KEY,
-        pdf_id TEXT NOT NULL,
-        page INTEGER NOT NULL,
-        text TEXT NOT NULL,
-        user_id TEXT NOT NULL,
-        timestamp INTEGER NOT NULL,
-        created_at INTEGER NOT NULL
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_notes_pdf ON notes(pdf_id);
-      CREATE INDEX IF NOT EXISTS idx_notes_user ON notes(user_id);
     `);
-
-    // Migration: Add total_pages column if it doesn't exist (for existing tables)
-    try {
-      const tableInfo = this.db.pragma('table_info(user_positions)') as any[];
-      const hasTotalPages = tableInfo.some(col => col.name === 'total_pages');
-
-      if (!hasTotalPages) {
-        console.log('🔄 Migrating database: Adding total_pages to user_positions');
-        this.db.exec('ALTER TABLE user_positions ADD COLUMN total_pages INTEGER DEFAULT 0');
-      }
-    } catch (error) {
-      console.error('Migration error:', error);
-    }
 
     console.log('✅ Database initialized (v2 + books)');
   }
@@ -367,89 +319,5 @@ export class DatabaseManager {
       totalPdfs: totalPdfs.count,
       dbSizeBytes,
     };
-  }
-  // --- User Position & Progress Methods ---
-
-  saveUserPosition(userId: string, pdfId: string, page: number, scrollY: number, totalPages: number = 0): void {
-    const stmt = this.db.prepare(`
-      INSERT OR REPLACE INTO user_positions (user_id, pdf_id, page, scroll_y, total_pages, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `);
-
-    stmt.run(userId, pdfId, page, scrollY, totalPages, Date.now());
-  }
-
-  loadUserPosition(userId: string, pdfId: string): { page: number; scrollY: number } | null {
-    const row = this.db
-      .prepare('SELECT page, scroll_y FROM user_positions WHERE user_id = ? AND pdf_id = ?')
-      .get(userId, pdfId) as { page: number; scroll_y: number } | undefined;
-
-    if (!row) return null;
-    return { page: row.page, scrollY: row.scroll_y };
-  }
-
-  getUserProgress(userId: string): Record<string, { page: number; total: number; percentage: number; updatedAt: number }> {
-    const rows = this.db
-      .prepare('SELECT pdf_id, page, total_pages, updated_at FROM user_positions WHERE user_id = ?')
-      .all(userId) as { pdf_id: string; page: number; total_pages: number; updated_at: number }[];
-
-    const progress: Record<string, { page: number; total: number; percentage: number; updatedAt: number }> = {};
-
-    for (const row of rows) {
-      const total = row.total_pages || 1; // Avoid division by zero
-      const percentage = Math.min(100, Math.round((row.page / total) * 100));
-
-      progress[row.pdf_id] = {
-        page: row.page,
-        total: row.total_pages,
-        percentage,
-        updatedAt: row.updated_at
-      };
-    }
-
-    return progress;
-  }
-
-  // --- Notes Methods ---
-
-  saveNote(note: Note): void {
-    const stmt = this.db.prepare(`
-      INSERT INTO notes (id, pdf_id, page, text, user_id, timestamp, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    stmt.run(
-      note.id,
-      note.pdfId,
-      note.page,
-      note.text,
-      note.userId,
-      note.timestamp,
-      note.createdAt || Date.now()
-    );
-  }
-
-  getNotesByPdf(pdfId: string): Note[] {
-    const rows = this.db
-      .prepare('SELECT * FROM notes WHERE pdf_id = ? ORDER BY page ASC, timestamp DESC')
-      .all(pdfId) as any[];
-
-    return rows.map(row => ({
-      id: row.id,
-      pdfId: row.pdf_id,
-      page: row.page,
-      text: row.text,
-      userId: row.user_id,
-      timestamp: row.timestamp,
-      createdAt: row.created_at
-    }));
-  }
-
-  deleteNote(id: string): void {
-    this.db.prepare('DELETE FROM notes WHERE id = ?').run(id);
-  }
-
-  updateNote(id: string, text: string): void {
-    this.db.prepare('UPDATE notes SET text = ? WHERE id = ?').run(text, id);
   }
 }

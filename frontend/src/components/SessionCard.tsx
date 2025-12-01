@@ -35,7 +35,7 @@ export const SessionCard = ({
     <div
       onClick={onClick}
       className={cn(
-        "group relative overflow-hidden rounded-3xl bg-card cursor-pointer",
+        "group relative overflow-hidden rounded-3xl bg-card cursor-pointer h-full flex flex-col",
         "transition-all duration-300 hover:scale-[1.02]",
         "shadow-warm-sm hover:shadow-warm-md",
         variant === "primary" && "bg-gradient-to-br from-primary-light/10 to-card",
@@ -66,7 +66,7 @@ export const SessionCard = ({
             <FileText className="w-16 h-16 text-muted-foreground/30" strokeWidth={1.5} />
           </div>
         )}
-        
+
         {/* Status Pill */}
         <div className="absolute top-3 left-3">
           <span className={cn(
@@ -81,8 +81,8 @@ export const SessionCard = ({
       </div>
 
       {/* Content */}
-      <div className="p-5 space-y-3">
-        <h3 className="font-heading font-bold text-lg line-clamp-2 text-foreground group-hover:text-primary transition-colors">
+      <div className="p-5 space-y-3 flex-1 flex flex-col">
+        <h3 className="font-heading font-bold text-lg line-clamp-2 text-foreground group-hover:text-primary transition-colors mb-auto">
           {title}
         </h3>
 
@@ -92,7 +92,7 @@ export const SessionCard = ({
             <Users className="w-4 h-4" />
             <span className="font-medium">{participants}</span>
           </div>
-          
+
           {progress > 0 && (
             <div className="flex items-center gap-1.5">
               <Clock className="w-4 h-4" />
@@ -102,14 +102,12 @@ export const SessionCard = ({
         </div>
 
         {/* Progress Bar */}
-        {progress > 0 && (
-          <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-primary-light to-primary rounded-full transition-all duration-500"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-        )}
+        <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden mt-auto">
+          <div
+            className="h-full bg-gradient-to-r from-primary-light to-primary rounded-full transition-all duration-500"
+            style={{ width: `${Math.max(progress, 0)}%` }}
+          />
+        </div>
       </div>
 
       {/* Hover Overlay */}

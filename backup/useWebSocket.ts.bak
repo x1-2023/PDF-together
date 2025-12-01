@@ -3,7 +3,7 @@ import { usePDFStore } from '@/store/usePDFStore';
 import { useUIStore } from '@/store/useUIStore';
 import { Annotation, PathAnnotation, TextAnnotation } from '@/types';
 
-const WS_URL = 'ws://localhost:3001/ws';
+const WS_URL = 'ws://localhost:3001';
 
 export interface ChatMessage {
     id: string;
@@ -17,19 +17,17 @@ export interface ChatMessage {
 
 export const useWebSocket = (channelId: string, userId: string, username: string) => {
     const ws = useRef<WebSocket | null>(null);
-    const { addAnnotation, removeAnnotation, updateAnnotation, setAnnotations, setCurrentPage } = usePDFStore();
+    const { addAnnotation, removeAnnotation, updateAnnotation, setAnnotations } = usePDFStore();
     const [messages, setMessages] = useState<ChatMessage[]>([]);
-    const [isConnected, setIsConnected] = useState(false);
 
     const connect = useCallback(() => {
         if (ws.current?.readyState === WebSocket.OPEN) return;
 
-        const url = `${WS_URL}?channelId=${encodeURIComponent(channelId)}&userId=${encodeURIComponent(userId)}&username=${encodeURIComponent(username)}`;
+        const url = `${WS_URL}?channelId=${channelId}&userId=${userId}&username=${username}`;
         ws.current = new WebSocket(url);
 
         ws.current.onopen = () => {
             console.log('Connected to WebSocket');
-            setIsConnected(true);
         };
 
         ws.current.onmessage = (event) => {
@@ -43,7 +41,6 @@ export const useWebSocket = (channelId: string, userId: string, username: string
 
         ws.current.onclose = () => {
             console.log('Disconnected from WebSocket');
-            setIsConnected(false);
             // Reconnect logic could go here
         };
 
@@ -100,17 +97,6 @@ export const useWebSocket = (channelId: string, userId: string, username: string
 
             case 'delete_annotation_broadcast':
                 removeAnnotation(message.id);
-                break;
-
-            case 'position_loaded':
-                // Restore user's saved position
-                console.log('📍 Position loaded from server:', { page: message.page, scrollY: message.scrollY });
-                if (typeof message.page === 'number') {
-                    console.log('📍 Setting current page to:', message.page);
-                    setCurrentPage(message.page);
-                } else {
-                    console.warn('⚠️ Invalid page number received:', message.page);
-                }
                 break;
 
             case 'chat':
@@ -180,38 +166,12 @@ export const useWebSocket = (channelId: string, userId: string, username: string
         }));
     };
 
-    const savePosition = useCallback((pdfId: string, page: number, scrollY: number) => {
-        if (ws.current?.readyState !== WebSocket.OPEN) {
-            console.warn('⚠️ WebSocket not open, cannot save position');
-            return;
-        }
-        console.log('💾 Saving position:', { pdfId, page, scrollY });
-        ws.current.send(JSON.stringify({
-            type: 'save_position',
-            pdfId,
-            page,
-            scrollY
-        }));
-    }, []);
-
-    const loadPosition = useCallback((pdfId: string) => {
-        if (ws.current?.readyState !== WebSocket.OPEN) {
-            console.warn('⚠️ WebSocket not open, cannot load position');
-            return;
-        }
-        console.log('📍 Requesting position for PDF:', pdfId);
-        ws.current.send(JSON.stringify({
-            type: 'load_position',
-            pdfId
-        }));
-    }, []);
-
     useEffect(() => {
         connect();
         return () => {
             ws.current?.close();
         };
-    }, [channelId, userId, username]); // Use stable values instead of connect function
+    }, [connect]);
 
-    return { sendAnnotation, deleteAnnotation, sendMessage, messages, savePosition, loadPosition, isConnected };
+    return { sendAnnotation, deleteAnnotation, sendMessage, messages };
 };

@@ -85,6 +85,4 @@ export type WSMessage =
   | { type: 'pdf_deleted'; pdfId: string }
   | { type: 'user_joined'; user: UserProfile }
   | { type: 'user_left'; userId: string }
-  | { type: 'chat'; data: ChatMessage }
-  | { type: 'save_position'; pdfId: string; page: number; scrollY?: number; totalPages?: number }
-  | { type: 'load_position'; pdfId: string };
+  | { type: 'chat'; data: ChatMessage };

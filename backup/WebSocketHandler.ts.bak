@@ -182,31 +182,6 @@ export class WebSocketHandler {
         this.broadcastToRoom(channelId, message, ws);
         break;
 
-      case 'save_position':
-        if (message.pdfId && typeof message.page === 'number') {
-          console.log(`💾 Saving position for user ${userId}: PDF ${message.pdfId}, Page ${message.page}`);
-          this.roomManager.saveUserPosition(userId, message.pdfId, message.page, message.scrollY || 0, message.totalPages || 0);
-        }
-        break;
-
-      case 'load_position':
-        if (message.pdfId) {
-          console.log(`📍 Loading position for user ${userId}: PDF ${message.pdfId}`);
-          const position = this.roomManager.loadUserPosition(userId, message.pdfId);
-          if (position) {
-            console.log(`📍 Position found: Page ${position.page}`);
-            this.sendToClient(ws, {
-              type: 'position_loaded',
-              pdfId: message.pdfId,
-              page: position.page,
-              scrollY: position.scrollY
-            });
-          } else {
-            console.log(`📍 No saved position found`);
-          }
-        }
-        break;
-
       case 'chat':
         // Broadcast chat message to all other clients
         this.broadcastToRoom(channelId, message, ws);

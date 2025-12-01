@@ -170,13 +170,4 @@ export class RoomManager {
       }
     }
   }
-  // Save user's reading position
-  saveUserPosition(userId: string, pdfId: string, page: number, scrollY: number, totalPages: number = 0): void {
-    this.db.saveUserPosition(userId, pdfId, page, scrollY, totalPages);
-  }
-
-  // Load user's reading position
-  loadUserPosition(userId: string, pdfId: string): { page: number; scrollY: number } | null {
-    return this.db.loadUserPosition(userId, pdfId);
-  }
 }

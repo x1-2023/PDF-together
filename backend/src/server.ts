@@ -146,21 +146,31 @@ app.get('/api/pdfs', (req, res) => {
     const dbBooks = db.getAllBooks();
     const dbBooksMap = new Map(dbBooks.map(b => [b.id, b]));
 
+    const userId = req.query.userId as string;
+    const userProgress = userId ? db.getUserProgress(userId) : {};
+
     const pdfFiles = files
       .filter(f => f.endsWith('.pdf'))
       .map(f => {
         const stats = fs.statSync(path.join(UPLOADS_DIR, f));
         const bookMetadata = dbBooksMap.get(f);
+        const progress = userProgress[f];
 
         return {
           id: f,
           title: bookMetadata?.title || f.replace(/^\d+-/, '').replace(/^[a-f0-9-]+-/, ''), // Use title from DB or fallback to filename
           author: bookMetadata?.author || 'Unknown Author',
-          cover: bookMetadata?.cover_image || null,
+          cover: bookMetadata?.cover_image || COVER_IMAGES[Math.abs(f.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)) % COVER_IMAGES.length],
           description: bookMetadata?.description || '',
           url: `/pdf/${f}`,
           size: stats.size,
-          uploadedAt: bookMetadata?.created_at || stats.birthtimeMs
+          uploadedAt: bookMetadata?.created_at || stats.birthtimeMs,
+          progress: progress ? {
+            page: progress.page,
+            total: progress.total,
+            percentage: progress.percentage,
+            updatedAt: progress.updatedAt
+          } : null
         };
       });
 
@@ -301,6 +311,80 @@ app.delete('/api/pdfs/:id', (req, res) => {
   } catch (error) {
     console.error('Error deleting PDF:', error);
     res.status(500).json({ error: 'Failed to delete PDF' });
+  }
+});
+
+// --- Notes API Endpoints ---
+
+// GET /api/notes/:pdfId - Get all notes for a PDF
+app.get('/api/notes/:pdfId', (req, res) => {
+  try {
+    const { pdfId } = req.params;
+    const notes = db.getNotesByPdf(pdfId);
+    res.json({ notes });
+  } catch (error) {
+    console.error('Error fetching notes:', error);
+    res.status(500).json({ error: 'Failed to fetch notes' });
+  }
+});
+
+// POST /api/notes - Create a new note
+app.post('/api/notes', (req, res) => {
+  try {
+    const { pdfId, page, text, userId, timestamp } = req.body;
+
+    if (!pdfId || !text || !userId || page === undefined) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const note = {
+      id: `note-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      pdfId,
+      page,
+      text,
+      userId,
+      timestamp: timestamp || Date.now(),
+      createdAt: Date.now()
+    };
+
+    db.saveNote(note);
+    console.log(`📝 Created note: ${note.id} on page ${page}`);
+    res.json({ note });
+  } catch (error) {
+    console.error('Error creating note:', error);
+    res.status(500).json({ error: 'Failed to create note' });
+  }
+});
+
+// DELETE /api/notes/:id - Delete a note
+app.delete('/api/notes/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    db.deleteNote(id);
+    console.log(`🗑️ Deleted note: ${id}`);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting note:', error);
+    res.status(500).json({ error: 'Failed to delete note' });
+  }
+});
+
+// PUT /api/notes/:id - Update a note
+app.put('/api/notes/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const { text } = req.body;
+
+    if (!text) {
+      return res.status(400).json({ error: 'Missing text field' });
+    }
+
+    db.updateNote(id, text);
+    console.log(`✏️ Updated note: ${id}`);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error updating note:', error);
+    res.status(500).json({ error: 'Failed to update note' });
   }
 });
 
